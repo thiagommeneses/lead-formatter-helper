@@ -1,9 +1,8 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { MessageSquare, Download, FileSpreadsheet, AlertTriangle, Filter } from "lucide-react";
+import { MessageSquare, Download, FileSpreadsheet, AlertTriangle, Filter, Phone, CheckCircle } from "lucide-react";
 import { toast } from 'sonner';
 import FileUploader from '@/components/FileUploader';
 import { formatPhoneNumber, isValidBrazilianNumber, extractPhoneNumbers } from '@/utils/phoneUtils';
