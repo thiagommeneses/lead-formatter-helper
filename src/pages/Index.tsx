@@ -139,7 +139,7 @@ const Index = () => {
       if (visibleItemsCount >= 15 && displayData.length > 15) {
         // Handle pagination for data beyond the first 15 items
         const paginatedResult = paginateData(displayData.slice(15), currentPage, 10);
-        setVisibleData([...initialData, ...paginatedResult.data]);
+        setVisibleData([...initialData, ...paginatedResult.items]); // Fix: changed .data to .items
         setTotalPages(paginatedResult.totalPages);
       } else {
         setVisibleData(initialData);
