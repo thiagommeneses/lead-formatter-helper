@@ -35,7 +35,6 @@ interface Lead {
   [key: string]: string;
 }
 
-// Updated interface to match react-day-picker's DateRange
 interface DateRange {
   from: Date | undefined;
   to?: Date | undefined;
@@ -73,27 +72,21 @@ const Index = () => {
   const applyFilters = (sourceData: Lead[] = data) => {
     let filteredData = [...sourceData];
 
-    // Apply date range filter
     if (dateRange.from || dateRange.to) {
       filteredData = filteredData.filter(row => {
         if (!row['Data da Conversão']) return false;
         
         try {
-          // Convert the conversion date string to a Date object
-          // The format is expected to be "YYYY-MM-DD HH:MM:SS TZ"
           const conversionDate = new Date(row['Data da Conversão']);
           
           if (dateRange.from && dateRange.to) {
-            // Both start and end dates are set
             return isWithinInterval(conversionDate, { 
               start: dateRange.from, 
               end: dateRange.to 
             });
           } else if (dateRange.from) {
-            // Only start date is set
             return conversionDate >= dateRange.from;
           } else if (dateRange.to) {
-            // Only end date is set
             return conversionDate <= dateRange.to;
           }
         } catch (error) {
@@ -104,7 +97,6 @@ const Index = () => {
       });
     }
 
-    // Apply regex filter to Identificador
     if (regexFilter.trim()) {
       try {
         const regexPattern = new RegExp(regexFilter, 'i');
@@ -116,7 +108,6 @@ const Index = () => {
       }
     }
 
-    // Process phone numbers
     if (formatNumbers || removeDuplicates || removeInvalid) {
       const processedNumbers = new Set<string>();
       
@@ -127,12 +118,10 @@ const Index = () => {
         const formattedNumber = formatNumbers ? formatPhoneNumber(phoneNumber) : phoneNumber;
         row['Celular'] = formattedNumber;
         
-        // Check if valid
         if (removeInvalid && !isValidBrazilianNumber(formattedNumber)) {
           return false;
         }
         
-        // Check for duplicates
         if (removeDuplicates) {
           if (processedNumbers.has(formattedNumber)) {
             return false;
@@ -153,13 +142,10 @@ const Index = () => {
   };
 
   const exportPhoneNumbers = () => {
-    // Get all unique, valid phone numbers
     const phoneNumbers = extractPhoneNumbers(displayData);
     
-    // Create CSV content
     const csvContent = "fullNumber\n" + phoneNumbers.join("\n");
     
-    // Create blob and download link
     const blob = new Blob([csvContent], { type: 'text/csv;charset=ansi' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -182,18 +168,14 @@ const Index = () => {
       return;
     }
     
-    // Get all unique, valid phone numbers
     const phoneNumbers = extractPhoneNumbers(displayData);
     
-    // Create CSV content with headers "celular" and "sms"
-    let csvContent = "celular,sms\n";
+    let csvContent = "celular;sms\n";
     
-    // Add each phone number with the SMS text
     phoneNumbers.forEach(number => {
-      csvContent += `${number},"${smsText}"\n`;
+      csvContent += `${number};"${smsText}"\n`;
     });
     
-    // Create blob and download link
     const blob = new Blob([csvContent], { type: 'text/csv;charset=ansi' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -202,7 +184,6 @@ const Index = () => {
     link.click();
     URL.revokeObjectURL(url);
     
-    // Close dialog and show success message
     setShowSmsDialog(false);
     setSmsText("");
     toast.success(`${phoneNumbers.length} números exportados para formato Zenvia!`);
@@ -370,7 +351,7 @@ const Index = () => {
                   </div>
                   <div className="space-x-2">
                     <Button onClick={exportPhoneNumbers} variant="outline">
-                      Exportar Números
+                      Exportar Para Omnichat
                     </Button>
                     <Button 
                       onClick={() => setShowSmsDialog(true)}
