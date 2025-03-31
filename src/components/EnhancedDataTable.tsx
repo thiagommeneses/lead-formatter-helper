@@ -1,0 +1,117 @@
+
+import React from 'react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { formatPhoneNumberForDisplay } from '@/utils/phoneUtils';
+import { PhoneValidationIssue, validateBrazilianPhoneNumber, getValidationColor } from '@/utils/phoneValidation';
+
+interface EnhancedDataTableProps {
+  data: any[];
+  showAllColumns?: boolean;
+  essentialColumns?: string[];
+  paginationEnabled?: boolean;
+  pageSize?: number;
+  currentPage?: number;
+  setCurrentPage?: (page: number) => void;
+  totalPages?: number;
+}
+
+const EnhancedDataTable: React.FC<EnhancedDataTableProps> = ({ 
+  data,
+  showAllColumns = true,
+  essentialColumns = ["Data da Conversão", "Identificador", "Celular"],
+  paginationEnabled = false,
+  pageSize = 10,
+  currentPage = 1,
+  setCurrentPage = () => {},
+  totalPages = 1
+}) => {
+  if (!data || data.length === 0) {
+    return <div className="text-center p-4 text-gray-500">Nenhum dado disponível</div>;
+  }
+
+  // Get all headers from the first row
+  const allHeaders = Object.keys(data[0]);
+  
+  // Determine which headers to display
+  const headers = showAllColumns ? allHeaders : essentialColumns.filter(col => allHeaders.includes(col));
+
+  // Enhanced cell renderer for phone numbers
+  const renderPhoneCell = (value: string) => {
+    if (!value) return '';
+    
+    const issue = validateBrazilianPhoneNumber(value);
+    const displayValue = formatPhoneNumberForDisplay(value);
+    const textColorClass = getValidationColor(issue);
+    
+    if (issue === PhoneValidationIssue.NONE) {
+      return <span className={textColorClass}>{displayValue}</span>;
+    }
+    
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className={textColorClass}>{displayValue}</span>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Problema: {issue}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  };
+
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            {headers.map((header, index) => (
+              <TableHead key={index} className="whitespace-nowrap">
+                {header}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {data.map((row, rowIndex) => (
+            <TableRow key={rowIndex}>
+              {headers.map((header, colIndex) => (
+                <TableCell key={colIndex} className="max-w-xs truncate">
+                  {(header === 'Celular' || header === 'Telefone') 
+                    ? renderPhoneCell(row[header])
+                    : row[header]}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      
+      {paginationEnabled && totalPages > 1 && (
+        <div className="flex items-center justify-center space-x-2 py-4">
+          <button
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage(currentPage - 1)}
+            className="px-3 py-1 rounded border disabled:opacity-50"
+          >
+            Anterior
+          </button>
+          <span className="text-sm">
+            Página {currentPage} de {totalPages}
+          </span>
+          <button
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage(currentPage + 1)}
+            className="px-3 py-1 rounded border disabled:opacity-50"
+          >
+            Próxima
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default EnhancedDataTable;

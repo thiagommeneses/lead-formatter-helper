@@ -24,7 +24,7 @@ export function formatPhoneNumber(phoneNumber: string): string {
  * List of valid Brazilian DDD codes
  * This is a comprehensive list of all valid DDD codes in Brazil
  */
-const validBrazilianDDDs = [
+export const validBrazilianDDDs = [
   // São Paulo
   '11', '12', '13', '14', '15', '16', '17', '18', '19',
   // Rio de Janeiro
@@ -145,4 +145,28 @@ export function extractPhoneNumbers(data: any[]): string[] {
   });
   
   return Array.from(numbers);
+}
+
+/**
+ * Format a phone number for display in a human-readable format
+ * Example: 5511987654321 -> +55 (11) 98765-4321
+ */
+export function formatPhoneNumberForDisplay(phoneNumber: string): string {
+  // Remove all non-digit characters
+  const digitsOnly = phoneNumber.replace(/\D/g, '');
+  
+  // If it's empty or too short, return the original
+  if (!digitsOnly || digitsOnly.length < 12) return phoneNumber;
+  
+  // Format for display
+  try {
+    const countryCode = digitsOnly.substring(0, 2);
+    const ddd = digitsOnly.substring(2, 4);
+    const firstPart = digitsOnly.substring(4, 9);
+    const secondPart = digitsOnly.substring(9);
+    
+    return `+${countryCode} (${ddd}) ${firstPart}-${secondPart}`;
+  } catch (error) {
+    return phoneNumber;
+  }
 }

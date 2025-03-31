@@ -2,20 +2,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
-import { format, isWithinInterval } from "date-fns";
-import { CalendarIcon, CalendarRange, MessageSquare } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { MessageSquare } from "lucide-react";
 import { toast } from 'sonner';
 import FileUploader from '@/components/FileUploader';
-import DataTable from '@/components/DataTable';
 import { formatPhoneNumber, isValidBrazilianNumber, extractPhoneNumbers } from '@/utils/phoneUtils';
-import { DateRange as DayPickerDateRange } from 'react-day-picker';
 import { 
   Dialog, 
   DialogContent, 
@@ -25,6 +16,11 @@ import {
   DialogDescription
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import FilterOptions from '@/components/FilterOptions';
+import FilterStatistics from '@/components/FilterStatistics';
+import EnhancedDataTable from '@/components/EnhancedDataTable';
+import ExportPreview from '@/components/ExportPreview';
+import { paginateData, processDataInChunks } from '@/utils/dataLoader';
 
 interface Lead {
   'Data da Conversão': string;
@@ -52,11 +48,12 @@ interface FilterStats {
 const Index = () => {
   const [data, setData] = useState<Lead[]>([]);
   const [displayData, setDisplayData] = useState<Lead[]>([]);
+  const [paginatedData, setPaginatedData] = useState<Lead[]>([]);
   const [visibleRows, setVisibleRows] = useState(10);
   const [removeDuplicates, setRemoveDuplicates] = useState(false);
   const [formatNumbers, setFormatNumbers] = useState(false);
   const [removeInvalid, setRemoveInvalid] = useState(false);
-  const [removeEmpty, setRemoveEmpty] = useState(true); // New state for removing empty phone numbers, default to true
+  const [removeEmpty, setRemoveEmpty] = useState(true);
   const [dateRange, setDateRange] = useState<DateRange>({ from: undefined });
   const [regexFilter, setRegexFilter] = useState("");
   const [isCSVLoaded, setIsCSVLoaded] = useState(false);
@@ -71,12 +68,33 @@ const Index = () => {
     duplicateNumbers: 0,
     validPhoneNumbers: 0
   });
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [showExportPreview, setShowExportPreview] = useState(false);
+  const [exportType, setExportType] = useState<'omnichat' | 'zenvia'>('omnichat');
+  const [phonesToExport, setPhonesToExport] = useState<string[]>([]);
+  const pageSize = 50; // Page size for pagination
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = (csvData: Lead[]) => {
+  const handleFileUpload = async (csvData: Lead[]) => {
+    setIsLoading(true);
     setData(csvData);
-    applyFilters(csvData);
+    
+    // Process in chunks to avoid UI freezing with large data
+    await processDataInChunks<Lead, void>(
+      csvData,
+      () => {},
+      1000,
+      (processed, total) => {
+        toast.info(`Processando dados: ${Math.round((processed/total)*100)}%`);
+      }
+    );
+    
+    await applyFilters(csvData);
     setIsCSVLoaded(true);
+    setIsLoading(false);
     toast.success("CSV carregado com sucesso!");
   };
 
@@ -87,7 +105,19 @@ const Index = () => {
     }
   }, [filterApplied]);
 
-  const applyFilters = (sourceData: Lead[] = data) => {
+  useEffect(() => {
+    // When display data changes, update pagination
+    updatePagination(currentPage);
+  }, [displayData, currentPage]);
+
+  const updatePagination = (page: number) => {
+    const result = paginateData(displayData, page, pageSize);
+    setPaginatedData(result.items);
+    setTotalPages(result.totalPages);
+  };
+
+  const applyFilters = async (sourceData: Lead[] = data) => {
+    setIsLoading(true);
     let filteredData = [...sourceData];
     const stats: FilterStats = {
       totalRecords: sourceData.length,
@@ -113,10 +143,7 @@ const Index = () => {
           const conversionDate = new Date(row['Data da Conversão']);
           
           if (dateRange.from && dateRange.to) {
-            return isWithinInterval(conversionDate, { 
-              start: dateRange.from, 
-              end: dateRange.to 
-            });
+            return conversionDate >= dateRange.from && conversionDate <= dateRange.to;
           } else if (dateRange.from) {
             return conversionDate >= dateRange.from;
           } else if (dateRange.to) {
@@ -147,30 +174,40 @@ const Index = () => {
       const invalidCount = { value: 0 };
       const duplicateCount = { value: 0 };
       
-      filteredData = filteredData.filter(row => {
-        const phoneNumber = row['Celular'] || row['Telefone'];
-        if (!phoneNumber) return true;
-        
-        const formattedNumber = formatNumbers ? formatPhoneNumber(phoneNumber) : phoneNumber;
-        row['Celular'] = formattedNumber;
-        
-        if (!isValidBrazilianNumber(formattedNumber)) {
-          invalidCount.value++;
-          if (removeInvalid) {
-            return false;
+      // Process data in chunks for better performance
+      filteredData = await processDataInChunks<Lead, Lead>(
+        filteredData,
+        row => {
+          const phoneNumber = row['Celular'] || row['Telefone'];
+          if (!phoneNumber) return row;
+          
+          const formattedNumber = formatNumbers ? formatPhoneNumber(phoneNumber) : phoneNumber;
+          row['Celular'] = formattedNumber;
+          
+          if (!isValidBrazilianNumber(formattedNumber)) {
+            invalidCount.value++;
+            if (removeInvalid) {
+              return null as unknown as Lead;
+            }
+          }
+          
+          if (processedNumbers.has(formattedNumber)) {
+            duplicateCount.value++;
+            if (removeDuplicates) {
+              return null as unknown as Lead;
+            }
+          }
+          
+          processedNumbers.add(formattedNumber);
+          return row;
+        },
+        500,
+        (processed, total) => {
+          if (total > 1000) {  // Only show progress for large datasets
+            toast.info(`Aplicando filtros: ${Math.round((processed/total)*100)}%`);
           }
         }
-        
-        if (processedNumbers.has(formattedNumber)) {
-          duplicateCount.value++;
-          if (removeDuplicates) {
-            return false;
-          }
-        }
-        
-        processedNumbers.add(formattedNumber);
-        return true;
-      });
+      ).then(results => results.filter(Boolean) as Lead[]);
 
       stats.invalidNumbers = invalidCount.value;
       stats.duplicateNumbers = duplicateCount.value;
@@ -180,17 +217,23 @@ const Index = () => {
     stats.filteredRecords = filteredData.length;
     setFilterStats(stats);
     setDisplayData(filteredData);
-    setVisibleRows(10);
+    setCurrentPage(1); // Reset to first page when filters change
+    setIsLoading(false);
   };
 
-  const loadMoreRows = () => {
-    setVisibleRows(prev => prev + 10);
-  };
-
-  const exportPhoneNumbers = () => {
+  const handleOmnichatExport = () => {
+    setExportType('omnichat');
     const phoneNumbers = extractPhoneNumbers(displayData);
-    
-    const csvContent = "fullNumber\n" + phoneNumbers.join("\n");
+    setPhonesToExport(phoneNumbers);
+    setShowExportPreview(true);
+  };
+
+  const handleZenviaExport = () => {
+    setShowSmsDialog(true);
+  };
+
+  const exportPhoneNumbers = (selectedNumbers: string[]) => {
+    const csvContent = "fullNumber\n" + selectedNumbers.join("\n");
     
     const blob = new Blob([csvContent], { type: 'text/csv;charset=ansi' });
     const url = URL.createObjectURL(blob);
@@ -200,7 +243,7 @@ const Index = () => {
     link.click();
     URL.revokeObjectURL(url);
     
-    toast.success(`${phoneNumbers.length} números exportados com sucesso!`);
+    toast.success(`${selectedNumbers.length} números exportados com sucesso!`);
   };
 
   const exportForZenvia = () => {
@@ -214,30 +257,32 @@ const Index = () => {
       return;
     }
     
+    setExportType('zenvia');
     const phoneNumbers = extractPhoneNumbers(displayData);
-    
-    let csvContent = "celular;sms\n";
-    
-    phoneNumbers.forEach(number => {
-      csvContent += `${number};${smsText}\n`;
-    });
-    
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=ansi' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'zenvia_export.csv';
-    link.click();
-    URL.revokeObjectURL(url);
-    
-    setShowSmsDialog(false);
-    setSmsText("");
-    toast.success(`${phoneNumbers.length} números exportados para formato Zenvia!`);
+    setPhonesToExport(phoneNumbers);
+    setShowExportPreview(true);
   };
 
-  const handleCheckboxChange = (setter: React.Dispatch<React.SetStateAction<boolean>>, value: boolean) => {
-    setter(value);
-    setFilterApplied(true);
+  const handleFinalExport = (selectedNumbers: string[]) => {
+    if (exportType === 'omnichat') {
+      exportPhoneNumbers(selectedNumbers);
+    } else if (exportType === 'zenvia') {
+      let csvContent = "celular;sms\n";
+      selectedNumbers.forEach(number => {
+        csvContent += `${number};${smsText}\n`;
+      });
+      
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=ansi' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'zenvia_export.csv';
+      link.click();
+      URL.revokeObjectURL(url);
+      
+      setShowSmsDialog(false);
+      toast.success(`${selectedNumbers.length} números exportados para formato Zenvia!`);
+    }
   };
 
   return (
@@ -259,187 +304,64 @@ const Index = () => {
           </CardContent>
         </Card>
 
-        {isCSVLoaded && (
+        {isLoading && (
+          <div className="text-center p-4">
+            <p className="text-blue-600">Processando dados, por favor aguarde...</p>
+          </div>
+        )}
+
+        {isCSVLoaded && !isLoading && (
           <>
             <Card className="mb-6">
               <CardHeader>
                 <CardTitle>Opções e Filtros</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-4">
-                    <h3 className="font-medium">Processamento de Números</h3>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="removeDuplicates" 
-                        checked={removeDuplicates} 
-                        onCheckedChange={(checked) => {
-                          handleCheckboxChange(setRemoveDuplicates, checked === true);
-                        }}
-                      />
-                      <Label htmlFor="removeDuplicates">Remover duplicados</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="formatNumbers" 
-                        checked={formatNumbers} 
-                        onCheckedChange={(checked) => {
-                          handleCheckboxChange(setFormatNumbers, checked === true);
-                        }}
-                      />
-                      <Label htmlFor="formatNumbers">Corrigir formato (5562982221100)</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="removeInvalid" 
-                        checked={removeInvalid} 
-                        onCheckedChange={(checked) => {
-                          handleCheckboxChange(setRemoveInvalid, checked === true);
-                        }}
-                      />
-                      <Label htmlFor="removeInvalid">Remover números inválidos</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id="removeEmpty" 
-                        checked={removeEmpty} 
-                        onCheckedChange={(checked) => {
-                          handleCheckboxChange(setRemoveEmpty, checked === true);
-                        }}
-                      />
-                      <Label htmlFor="removeEmpty">Remover números em branco</Label>
-                    </div>
-                    <div className="flex items-center space-x-2 mt-4">
-                      <Checkbox 
-                        id="showAllColumns" 
-                        checked={showAllColumns} 
-                        onCheckedChange={(checked) => {
-                          setShowAllColumns(checked === true);
-                        }}
-                      />
-                      <Label htmlFor="showAllColumns">Exibir todas as colunas</Label>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h3 className="font-medium">Filtro por Período</h3>
-                    <div>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              "w-full justify-start text-left font-normal",
-                              !dateRange.from && !dateRange.to && "text-muted-foreground"
-                            )}
-                          >
-                            <CalendarRange className="mr-2 h-4 w-4" />
-                            {dateRange.from || dateRange.to ? (
-                              <>
-                                {dateRange.from ? format(dateRange.from, "dd/MM/yyyy") : "Início"}
-                                {" - "}
-                                {dateRange.to ? format(dateRange.to, "dd/MM/yyyy") : "Fim"}
-                              </>
-                            ) : (
-                              <span>Selecione o período</span>
-                            )}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="range"
-                            selected={{
-                              from: dateRange.from,
-                              to: dateRange.to
-                            }}
-                            onSelect={(selectedRange: DayPickerDateRange | undefined) => {
-                              setDateRange(selectedRange || { from: undefined });
-                              setFilterApplied(true);
-                            }}
-                            numberOfMonths={2}
-                            className="p-3 pointer-events-auto"
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      {(dateRange.from || dateRange.to) && (
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="mt-2"
-                          onClick={() => {
-                            setDateRange({ from: undefined });
-                            setFilterApplied(true);
-                          }}
-                        >
-                          Limpar período
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h3 className="font-medium">Filtro por Identificador (Regex)</h3>
-                    <div>
-                      <Input
-                        placeholder="Ex: formulario|conversão"
-                        value={regexFilter}
-                        onChange={(e) => setRegexFilter(e.target.value)}
-                        className="mb-2"
-                      />
-                      <Button 
-                        onClick={() => applyFilters()}
-                        className="mr-2"
-                      >
-                        Aplicar Filtro
-                      </Button>
-                      {regexFilter && (
-                        <Button 
-                          variant="outline" 
-                          onClick={() => {
-                            setRegexFilter("");
-                            setFilterApplied(true);
-                          }}
-                        >
-                          Limpar
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <FilterOptions 
+                  removeDuplicates={removeDuplicates}
+                  setRemoveDuplicates={setRemoveDuplicates}
+                  formatNumbers={formatNumbers}
+                  setFormatNumbers={setFormatNumbers}
+                  removeInvalid={removeInvalid}
+                  setRemoveInvalid={setRemoveInvalid}
+                  removeEmpty={removeEmpty}
+                  setRemoveEmpty={setRemoveEmpty}
+                  showAllColumns={showAllColumns}
+                  setShowAllColumns={setShowAllColumns}
+                  dateRange={dateRange}
+                  setDateRange={setDateRange}
+                  regexFilter={regexFilter}
+                  setRegexFilter={setRegexFilter}
+                  applyFilters={() => applyFilters()}
+                  setFilterApplied={setFilterApplied}
+                />
 
                 <Separator className="my-6" />
 
-                <div className="bg-gray-50 p-4 rounded-lg mb-4">
-                  <h3 className="font-medium mb-2">Estatísticas de Filtro</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <p><strong>Total de registros:</strong> {filterStats.totalRecords}</p>
-                      <p><strong>Registros filtrados:</strong> {filterStats.filteredRecords}</p>
-                      <p><strong>Registros exibidos:</strong> {Math.min(visibleRows, displayData.length)}</p>
-                    </div>
-                    <div>
-                      <p><strong>Números duplicados:</strong> {filterStats.duplicateNumbers}</p>
-                      <p><strong>Números inválidos:</strong> {filterStats.invalidNumbers}</p>
-                      <p><strong>Números válidos:</strong> {filterStats.validPhoneNumbers}</p>
-                    </div>
-                    <div>
-                      <p><strong>Telefones para exportação:</strong> {extractPhoneNumbers(displayData).length}</p>
-                    </div>
-                  </div>
-                </div>
+                <FilterStatistics 
+                  filterStats={filterStats}
+                  displayData={displayData}
+                  visibleRows={paginatedData.length}
+                  validPhoneCount={extractPhoneNumbers(displayData).length}
+                />
 
                 <div className="flex justify-between items-center">
                   <div className="text-sm text-gray-500 space-y-1">
                     <p>Use as opções acima para filtrar os dados.</p>
                   </div>
                   <div className="space-x-2">
-                    <Button onClick={exportPhoneNumbers} variant="outline">
+                    <Button 
+                      onClick={handleOmnichatExport} 
+                      variant="outline"
+                      disabled={displayData.length === 0}
+                    >
                       Exportar Para Omnichat
                     </Button>
                     <Button 
-                      onClick={() => setShowSmsDialog(true)}
+                      onClick={handleZenviaExport}
                       variant="default"
                       className="bg-green-600 hover:bg-green-700"
+                      disabled={displayData.length === 0}
                     >
                       <MessageSquare className="mr-2 h-4 w-4" />
                       Exportar Para Zenvia
@@ -451,22 +373,19 @@ const Index = () => {
 
             <Card>
               <CardHeader>
-                <CardTitle>Dados do CSV</CardTitle>
+                <CardTitle>Dados do CSV ({displayData.length} registros)</CardTitle>
               </CardHeader>
               <CardContent>
-                <DataTable 
-                  data={displayData.slice(0, visibleRows)} 
+                <EnhancedDataTable 
+                  data={paginatedData}
                   showAllColumns={showAllColumns}
                   essentialColumns={["Data da Conversão", "Identificador", "Celular", "Nome"]}
+                  paginationEnabled={true}
+                  pageSize={pageSize}
+                  currentPage={currentPage}
+                  setCurrentPage={setCurrentPage}
+                  totalPages={totalPages}
                 />
-                
-                {visibleRows < displayData.length && (
-                  <div className="mt-4 text-center">
-                    <Button variant="outline" onClick={loadMoreRows}>
-                      Carregar mais {Math.min(10, displayData.length - visibleRows)} registros
-                    </Button>
-                  </div>
-                )}
               </CardContent>
             </Card>
           </>
@@ -502,11 +421,19 @@ const Index = () => {
                 disabled={smsText.trim() === "" || smsText.length > 160}
                 className="bg-green-600 hover:bg-green-700"
               >
-                Exportar {displayData.length > 0 ? `(${extractPhoneNumbers(displayData).length} números)` : ""}
+                Continuar {displayData.length > 0 ? `(${extractPhoneNumbers(displayData).length} números)` : ""}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <ExportPreview 
+          open={showExportPreview}
+          onOpenChange={setShowExportPreview}
+          phoneNumbers={phonesToExport}
+          onExport={handleFinalExport}
+          exportType={exportType}
+        />
       </div>
     </div>
   );
