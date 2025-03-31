@@ -10,25 +10,17 @@ interface EnhancedDataTableProps {
   data: any[];
   showAllColumns?: boolean;
   essentialColumns?: string[];
-  paginationEnabled?: boolean;
-  pageSize?: number;
-  currentPage?: number;
-  setCurrentPage?: (page: number) => void;
-  totalPages?: number;
+  emptyMessage?: string;
 }
 
 const EnhancedDataTable: React.FC<EnhancedDataTableProps> = ({ 
   data,
   showAllColumns = true,
   essentialColumns = ["Data da Conversão", "Identificador", "Celular"],
-  paginationEnabled = false,
-  pageSize = 10,
-  currentPage = 1,
-  setCurrentPage = () => {},
-  totalPages = 1
+  emptyMessage = "Nenhum dado disponível"
 }) => {
   if (!data || data.length === 0) {
-    return <div className="text-center p-4 text-gray-500">Nenhum dado disponível</div>;
+    return <div className="text-center p-4 text-gray-500">{emptyMessage}</div>;
   }
 
   // Get all headers from the first row
@@ -40,7 +32,7 @@ const EnhancedDataTable: React.FC<EnhancedDataTableProps> = ({
   // Enhanced cell renderer for phone numbers
   const renderPhoneCell = (value: string, row: any, fieldName: string) => {
     if (!value) {
-      // Se o campo Celular está vazio mas o Telefone não está, use o Telefone
+      // If the Celular field is empty but Telefone is not, use Telefone
       if (fieldName === 'Celular' && row['Telefone'] && row['Telefone'].trim() !== '') {
         return renderPhoneCell(row['Telefone'], row, 'Telefone');
       }
@@ -82,7 +74,7 @@ const EnhancedDataTable: React.FC<EnhancedDataTableProps> = ({
   };
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto bg-white rounded-md">
       <Table>
         <TableHeader>
           <TableRow>
