@@ -101,28 +101,6 @@ const EnhancedDataTable: React.FC<EnhancedDataTableProps> = ({
           ))}
         </TableBody>
       </Table>
-      
-      {paginationEnabled && totalPages > 1 && (
-        <div className="flex items-center justify-center space-x-2 py-4">
-          <button
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage(currentPage - 1)}
-            className="px-3 py-1 rounded border disabled:opacity-50"
-          >
-            Anterior
-          </button>
-          <span className="text-sm">
-            Página {currentPage} de {totalPages}
-          </span>
-          <button
-            disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage(currentPage + 1)}
-            className="px-3 py-1 rounded border disabled:opacity-50"
-          >
-            Próxima
-          </button>
-        </div>
-      )}
     </div>
   );
 };

@@ -1,8 +1,20 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { MessageSquare, Download, FileSpreadsheet, AlertTriangle, Filter, Phone, CheckCircle } from "lucide-react";
+import { 
+  MessageSquare, 
+  Download, 
+  FileSpreadsheet, 
+  AlertTriangle, 
+  Filter, 
+  Phone, 
+  CheckCircle, 
+  X, 
+  ArrowDown,
+  Plus
+} from "lucide-react";
 import { toast } from 'sonner';
 import FileUploader from '@/components/FileUploader';
 import { formatPhoneNumber, isValidBrazilianNumber, extractPhoneNumbers } from '@/utils/phoneUtils';
@@ -21,6 +33,8 @@ import EnhancedDataTable from '@/components/EnhancedDataTable';
 import ExportPreview from '@/components/ExportPreview';
 import { paginateData, processDataInChunks, filterDataInChunks } from '@/utils/dataLoader';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Menubar, MenubarContent, MenubarItem, MenubarMenu, MenubarTrigger } from "@/components/ui/menubar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 
 interface Lead {
   'Data da Conversão': string;
@@ -48,8 +62,7 @@ interface FilterStats {
 const Index = () => {
   const [data, setData] = useState<Lead[]>([]);
   const [displayData, setDisplayData] = useState<Lead[]>([]);
-  const [paginatedData, setPaginatedData] = useState<Lead[]>([]);
-  const [visibleRows, setVisibleRows] = useState(10);
+  const [visibleData, setVisibleData] = useState<Lead[]>([]);
   const [removeDuplicates, setRemoveDuplicates] = useState(false);
   const [formatNumbers, setFormatNumbers] = useState(false);
   const [removeInvalid, setRemoveInvalid] = useState(false);
@@ -75,7 +88,10 @@ const Index = () => {
   const [exportType, setExportType] = useState<'omnichat' | 'zenvia'>('omnichat');
   const [phonesToExport, setPhonesToExport] = useState<string[]>([]);
   const [processingProgress, setProcessingProgress] = useState(0);
-  const pageSize = 50; // Page size for pagination
+  const [showUploadArea, setShowUploadArea] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
+  const [showLoadMore, setShowLoadMore] = useState(false);
+  const [visibleItemsCount, setVisibleItemsCount] = useState(5);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -116,6 +132,7 @@ const Index = () => {
     await applyFilters(csvData);
     setIsCSVLoaded(true);
     setIsLoading(false);
+    setShowUploadArea(false);
     toast.success("CSV carregado com sucesso!");
   };
 
@@ -127,14 +144,33 @@ const Index = () => {
   }, [filterApplied]);
 
   useEffect(() => {
-    // When display data changes, update pagination
-    updatePagination(currentPage);
-  }, [displayData, currentPage]);
+    // When display data changes, update the visible data
+    updateVisibleData();
+  }, [displayData, visibleItemsCount]);
 
-  const updatePagination = (page: number) => {
-    const result = paginateData(displayData, page, pageSize);
-    setPaginatedData(result.items);
-    setTotalPages(result.totalPages);
+  const updateVisibleData = () => {
+    if (displayData.length <= 5) {
+      setVisibleData(displayData);
+      setShowLoadMore(false);
+    } else {
+      setVisibleData(displayData.slice(0, visibleItemsCount));
+      setShowLoadMore(visibleItemsCount < displayData.length && visibleItemsCount < 15);
+    }
+    
+    // If we need pagination (more than 15 items)
+    if (displayData.length > 15) {
+      const result = paginateData(displayData.slice(15), currentPage, 10);
+      setTotalPages(result.totalPages);
+    } else {
+      setTotalPages(1);
+    }
+  };
+
+  const loadMoreItems = () => {
+    const newCount = Math.min(visibleItemsCount + 5, 15);
+    setVisibleItemsCount(newCount);
+    // Check if we need to show the load more button
+    setShowLoadMore(newCount < displayData.length && newCount < 15);
   };
 
   const applyFilters = async (sourceData: Lead[] = data) => {
@@ -212,7 +248,8 @@ const Index = () => {
       filteredData = await filterDataInChunks<Lead>(
         filteredData,
         (row) => {
-          const phoneNumber = row['Celular'] || row['Telefone'];
+          // Get phone from Celular or Telefone fields
+          let phoneNumber = row['Celular'] || row['Telefone'];
           if (!phoneNumber) return true; // Keep rows without phone numbers
           
           // Format the phone number if requested
@@ -239,8 +276,13 @@ const Index = () => {
           if (formatNumbers) {
             const phoneNumber = row['Celular'] || row['Telefone'];
             if (phoneNumber) {
-              row['Celular'] = formatPhoneNumber(phoneNumber);
-              row['Telefone'] = ''; // Clean up secondary phone field
+              // If Celular is empty, use Telefone field
+              if (!row['Celular'] || row['Celular'].trim() === '') {
+                row['Celular'] = formatPhoneNumber(phoneNumber);
+                row['Telefone'] = ''; // Clean up secondary phone field
+              } else {
+                row['Celular'] = formatPhoneNumber(row['Celular']);
+              }
             }
           }
           return row;
@@ -260,6 +302,7 @@ const Index = () => {
       const validNumbers = new Set<string>();
       filteredData.forEach(row => {
         const phoneNumber = row['Celular'] || row['Telefone'];
+        
         if (phoneNumber && isValidBrazilianNumber(phoneNumber)) {
           validNumbers.add(phoneNumber);
         }
@@ -270,10 +313,24 @@ const Index = () => {
     stats.filteredRecords = filteredData.length;
     setFilterStats(stats);
     setDisplayData(filteredData);
+    setVisibleItemsCount(5); // Reset to initial 5 items
     setCurrentPage(1); // Reset to first page when filters change
     setIsLoading(false);
     
     toast.success("Filtros aplicados com sucesso!");
+  };
+
+  const resetData = () => {
+    setData([]);
+    setDisplayData([]);
+    setVisibleData([]);
+    setIsCSVLoaded(false);
+    setShowUploadArea(true);
+    setFilterApplied(false);
+    setCurrentPage(1);
+    setVisibleItemsCount(5);
+    setShowFilters(false);
+    toast.success("Dados limpos com sucesso!");
   };
 
   const handleOmnichatExport = () => {
@@ -364,26 +421,103 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-6 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Formatador de Leads</h1>
+    <div className="min-h-screen bg-gray-50 py-4 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto">
+        <div className="text-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Formatador de Leads</h1>
           <p className="mt-2 text-gray-600">
             Carregue seu CSV, aplique filtros e exporte números de celular formatados
           </p>
         </div>
 
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <FileSpreadsheet className="mr-2 h-5 w-5" />
-              Carregar Arquivo CSV
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <FileUploader onFileUploaded={handleFileUpload} />
-          </CardContent>
-        </Card>
+        {isCSVLoaded && !isLoading && (
+          <div className="sticky top-0 z-10 bg-white border-b border-gray-200 p-3 rounded-md mb-4 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="flex items-center"
+                >
+                  <Filter className="mr-1 h-4 w-4" />
+                  Filtros
+                  {showFilters ? <X className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />}
+                </Button>
+                
+                <span className="text-sm text-gray-500">
+                  {filterStats.filteredRecords} de {filterStats.totalRecords} registros
+                </span>
+              </div>
+              
+              <div className="flex flex-wrap items-center gap-2">
+                <Button 
+                  onClick={handleOmnichatExport} 
+                  variant="outline"
+                  size="sm"
+                  disabled={displayData.length === 0}
+                  className="flex items-center"
+                >
+                  <Download className="mr-1 h-4 w-4" />
+                  Exportar Para Omnichat
+                </Button>
+                
+                <Button 
+                  onClick={handleZenviaExport}
+                  variant="default"
+                  size="sm"
+                  className="bg-green-600 hover:bg-green-700 flex items-center"
+                  disabled={displayData.length === 0}
+                >
+                  <MessageSquare className="mr-1 h-4 w-4" />
+                  Exportar Para Zenvia
+                </Button>
+                
+                <Button 
+                  onClick={resetData}
+                  variant="destructive"
+                  size="sm"
+                  className="flex items-center"
+                >
+                  <X className="mr-1 h-4 w-4" />
+                  Fechar Arquivo
+                </Button>
+              </div>
+            </div>
+            
+            {showFilters && (
+              <div className="mt-3 p-3 border border-gray-200 rounded-md">
+                <FilterOptions 
+                  removeDuplicates={removeDuplicates}
+                  setRemoveDuplicates={setRemoveDuplicates}
+                  formatNumbers={formatNumbers}
+                  setFormatNumbers={setFormatNumbers}
+                  removeInvalid={removeInvalid}
+                  setRemoveInvalid={setRemoveInvalid}
+                  removeEmpty={removeEmpty}
+                  setRemoveEmpty={setRemoveEmpty}
+                  showAllColumns={showAllColumns}
+                  setShowAllColumns={setShowAllColumns}
+                  dateRange={dateRange}
+                  setDateRange={setDateRange}
+                  regexFilter={regexFilter}
+                  setRegexFilter={setRegexFilter}
+                  applyFilters={() => applyFilters()}
+                  setFilterApplied={setFilterApplied}
+                />
+                
+                <div className="mt-3">
+                  <FilterStatistics 
+                    filterStats={filterStats}
+                    displayData={displayData}
+                    visibleRows={visibleData.length}
+                    validPhoneCount={extractPhoneNumbers(displayData).length}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {isLoading && (
           <div className="text-center p-4 mb-4 bg-blue-50 rounded-lg border border-blue-100">
@@ -408,91 +542,70 @@ const Index = () => {
           </Alert>
         )}
 
+        {showUploadArea && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <FileSpreadsheet className="mr-2 h-5 w-5" />
+                Carregar Arquivo CSV
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FileUploader onFileUploaded={handleFileUpload} />
+            </CardContent>
+          </Card>
+        )}
+
         {isCSVLoaded && !isLoading && (
           <>
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <Filter className="mr-2 h-5 w-5" />
-                  Opções e Filtros
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <FilterOptions 
-                  removeDuplicates={removeDuplicates}
-                  setRemoveDuplicates={setRemoveDuplicates}
-                  formatNumbers={formatNumbers}
-                  setFormatNumbers={setFormatNumbers}
-                  removeInvalid={removeInvalid}
-                  setRemoveInvalid={setRemoveInvalid}
-                  removeEmpty={removeEmpty}
-                  setRemoveEmpty={setRemoveEmpty}
-                  showAllColumns={showAllColumns}
-                  setShowAllColumns={setShowAllColumns}
-                  dateRange={dateRange}
-                  setDateRange={setDateRange}
-                  regexFilter={regexFilter}
-                  setRegexFilter={setRegexFilter}
-                  applyFilters={() => applyFilters()}
-                  setFilterApplied={setFilterApplied}
-                />
-
-                <Separator className="my-6" />
-
-                <FilterStatistics 
-                  filterStats={filterStats}
-                  displayData={displayData}
-                  visibleRows={paginatedData.length}
-                  validPhoneCount={extractPhoneNumbers(displayData).length}
-                />
-
-                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-4">
-                  <div className="text-sm text-gray-500 space-y-1 text-center sm:text-left">
-                    <p>Use as opções acima para filtrar os dados.</p>
-                    <p>Os números válidos serão exportados nos formatos escolhidos.</p>
-                  </div>
-                  <div className="space-x-2 flex flex-wrap justify-center gap-2">
-                    <Button 
-                      onClick={handleOmnichatExport} 
-                      variant="outline"
-                      disabled={displayData.length === 0}
-                      className="flex items-center"
-                    >
-                      <Download className="mr-2 h-4 w-4" />
-                      Exportar Para Omnichat
-                    </Button>
-                    <Button 
-                      onClick={handleZenviaExport}
-                      variant="default"
-                      className="bg-green-600 hover:bg-green-700 flex items-center"
-                      disabled={displayData.length === 0}
-                    >
-                      <MessageSquare className="mr-2 h-4 w-4" />
-                      Exportar Para Zenvia
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center text-lg">
                   <FileSpreadsheet className="mr-2 h-5 w-5" />
                   Dados do CSV ({displayData.length} registros)
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <EnhancedDataTable 
-                  data={paginatedData}
+                  data={visibleData}
                   showAllColumns={showAllColumns}
                   essentialColumns={["Data da Conversão", "Identificador", "Celular", "Nome"]}
-                  paginationEnabled={true}
-                  pageSize={pageSize}
-                  currentPage={currentPage}
-                  setCurrentPage={setCurrentPage}
-                  totalPages={totalPages}
                 />
+                
+                {showLoadMore && (
+                  <div className="flex justify-center mt-4">
+                    <Button 
+                      variant="outline" 
+                      onClick={loadMoreItems}
+                      className="flex items-center"
+                    >
+                      <Plus className="mr-1 h-4 w-4" />
+                      Carregar mais itens
+                    </Button>
+                  </div>
+                )}
+                
+                {displayData.length > 15 && (
+                  <div className="flex items-center justify-center space-x-2 py-4 mt-2">
+                    <button
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage(currentPage - 1)}
+                      className="px-3 py-1 rounded border disabled:opacity-50"
+                    >
+                      Anterior
+                    </button>
+                    <span className="text-sm">
+                      Página {currentPage} de {totalPages}
+                    </span>
+                    <button
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage(currentPage + 1)}
+                      className="px-3 py-1 rounded border disabled:opacity-50"
+                    >
+                      Próxima
+                    </button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </>

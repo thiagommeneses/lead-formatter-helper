@@ -18,6 +18,9 @@ export function formatPhoneNumber(phoneNumber: string): string {
     // Only the number, without DDD or country code
     // Can't automatically format as we don't know the DDD
     return digitsOnly;
+  } else if (digitsOnly.length === 10 && !digitsOnly.startsWith('55')) {
+    // Likely a landline number with DDD (10 digits)
+    digitsOnly = '55' + digitsOnly;
   } else if (!digitsOnly.startsWith('55') && digitsOnly.length >= 10) {
     // Add Brazil country code
     digitsOnly = '55' + digitsOnly;
@@ -157,46 +160,78 @@ export function isValidBrazilianNumber(phoneNumber: string): boolean {
   // Check if it's empty
   if (!cleaned) return false;
   
-  // Check proper format: must start with 55, followed by valid DDD (2 digits), followed by 9 digits
-  // Must be exactly 13 digits for a valid Brazilian mobile number
-  if (cleaned.length !== 13 || !cleaned.startsWith('55')) {
-    return false;
+  // Check proper format for mobile with country code: 55 + DDD (2 digits) + 9 + 8 digits = 13 digits total
+  if (cleaned.length === 13 && cleaned.startsWith('55')) {
+    // Extract DDD and number without country code
+    const ddd = cleaned.substring(2, 4);
+    const number = cleaned.substring(4);
+    
+    // Check for valid DDD using our comprehensive list
+    if (!validBrazilianDDDs.includes(ddd)) {
+      return false;
+    }
+    
+    // For mobile numbers, should start with 9 (if it's 9 digits)
+    if (number.length === 9 && !number.startsWith('9')) {
+      return false;
+    }
+    
+    // Check for sequential patterns (123456789, etc)
+    if (/^(\d)\1+$/.test(number) ||             // All digits are the same (e.g., 999999999)
+        /^0123456789|1234567890$/.test(number) ||  // Sequential ascending
+        /^9876543210|0987654321$/.test(number)) {  // Sequential descending
+      return false;
+    }
+    
+    return true;
   }
   
-  // Extract DDD and number without country code
-  const ddd = cleaned.substring(2, 4);
-  const number = cleaned.substring(4);
-  
-  // Check for valid DDD using our comprehensive list
-  if (!validBrazilianDDDs.includes(ddd)) {
-    return false;
+  // Check for 11-digit format (DDD + 9-digit mobile number without country code)
+  if (cleaned.length === 11) {
+    const ddd = cleaned.substring(0, 2);
+    const number = cleaned.substring(2);
+    
+    // Check valid DDD
+    if (!validBrazilianDDDs.includes(ddd)) {
+      return false;
+    }
+    
+    // Check first digit is 9 for mobile
+    if (!number.startsWith('9')) {
+      return false;
+    }
+    
+    return true;
   }
   
-  // Check for sequential patterns (123456789, etc)
-  if (/^(\d)\1+$/.test(number) ||             // All digits are the same (e.g., 999999999)
-      /^0123456789|1234567890$/.test(number) ||  // Sequential ascending
-      /^9876543210|0987654321$/.test(number)) {  // Sequential descending
-    return false;
+  // Check for 10-digit format (DDD + 8-digit landline)
+  if (cleaned.length === 10) {
+    const ddd = cleaned.substring(0, 2);
+    
+    // Check valid DDD
+    if (!validBrazilianDDDs.includes(ddd)) {
+      return false;
+    }
+    
+    return true;
   }
   
-  // For mobile numbers, should start with 9 (if it's 9 digits)
-  if (number.length === 9 && !number.startsWith('9')) {
-    return false;
-  }
-  
-  return true;
+  return false;
 }
 
 /**
  * Extracts all unique valid phone numbers from lead data
+ * Uses both Celular and Telefone fields, prioritizing Celular if both exist
  * Filters out invalid and blank phone numbers
  */
 export function extractPhoneNumbers(data: any[]): string[] {
   const numbers = new Set<string>();
   
   data.forEach(row => {
-    // Try to get phone from Celular or Telefone fields
-    const phoneNumber = row['Celular'] || row['Telefone'];
+    // Try to get phone from Celular field first, then Telefone if Celular is empty
+    let phoneNumber = row['Celular'] && row['Celular'].trim() !== '' 
+      ? row['Celular'] 
+      : (row['Telefone'] && row['Telefone'].trim() !== '' ? row['Telefone'] : '');
     
     // Skip empty/blank phone numbers
     if (!phoneNumber || phoneNumber.trim() === '') {
