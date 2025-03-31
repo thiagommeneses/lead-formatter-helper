@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { format } from "date-fns";
-import { CalendarIcon } from "lucide-react";
+import { format, isWithinInterval } from "date-fns";
+import { CalendarIcon, CalendarRange } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from 'sonner';
 import FileUploader from '@/components/FileUploader';
@@ -26,6 +26,11 @@ interface Lead {
   [key: string]: string;
 }
 
+interface DateRange {
+  from: Date | undefined;
+  to: Date | undefined;
+}
+
 const Index = () => {
   const [data, setData] = useState<Lead[]>([]);
   const [displayData, setDisplayData] = useState<Lead[]>([]);
@@ -33,9 +38,10 @@ const Index = () => {
   const [removeDuplicates, setRemoveDuplicates] = useState(false);
   const [formatNumbers, setFormatNumbers] = useState(false);
   const [removeInvalid, setRemoveInvalid] = useState(false);
-  const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined);
+  const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
   const [regexFilter, setRegexFilter] = useState("");
   const [isCSVLoaded, setIsCSVLoaded] = useState(false);
+  const [filterApplied, setFilterApplied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = (csvData: Lead[]) => {
@@ -45,15 +51,45 @@ const Index = () => {
     toast.success("CSV carregado com sucesso!");
   };
 
+  useEffect(() => {
+    if (filterApplied) {
+      applyFilters();
+      setFilterApplied(false);
+    }
+  }, [filterApplied]);
+
   const applyFilters = (sourceData: Lead[] = data) => {
     let filteredData = [...sourceData];
 
-    // Apply date filter
-    if (dateFilter) {
-      const dateString = format(dateFilter, 'yyyy-MM-dd');
-      filteredData = filteredData.filter(row => 
-        row['Data da Conversão'] && row['Data da Conversão'].startsWith(dateString)
-      );
+    // Apply date range filter
+    if (dateRange.from || dateRange.to) {
+      filteredData = filteredData.filter(row => {
+        if (!row['Data da Conversão']) return false;
+        
+        try {
+          // Convert the conversion date string to a Date object
+          // The format is expected to be "YYYY-MM-DD HH:MM:SS TZ"
+          const conversionDate = new Date(row['Data da Conversão']);
+          
+          if (dateRange.from && dateRange.to) {
+            // Both start and end dates are set
+            return isWithinInterval(conversionDate, { 
+              start: dateRange.from, 
+              end: dateRange.to 
+            });
+          } else if (dateRange.from) {
+            // Only start date is set
+            return conversionDate >= dateRange.from;
+          } else if (dateRange.to) {
+            // Only end date is set
+            return conversionDate <= dateRange.to;
+          }
+        } catch (error) {
+          return false;
+        }
+        
+        return true;
+      });
     }
 
     // Apply regex filter to Identificador
@@ -123,6 +159,12 @@ const Index = () => {
     toast.success(`${phoneNumbers.length} números exportados com sucesso!`);
   };
 
+  // Handle checkbox changes with immediate filter application
+  const handleCheckboxChange = (setter: React.Dispatch<React.SetStateAction<boolean>>, value: boolean) => {
+    setter(value);
+    setFilterApplied(true);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-6 px-4 sm:px-6 lg:px-8">
       <div className="max-w-6xl mx-auto">
@@ -157,8 +199,7 @@ const Index = () => {
                         id="removeDuplicates" 
                         checked={removeDuplicates} 
                         onCheckedChange={(checked) => {
-                          setRemoveDuplicates(checked === true);
-                          setTimeout(() => applyFilters(), 0);
+                          handleCheckboxChange(setRemoveDuplicates, checked === true);
                         }}
                       />
                       <Label htmlFor="removeDuplicates">Remover duplicados</Label>
@@ -168,8 +209,7 @@ const Index = () => {
                         id="formatNumbers" 
                         checked={formatNumbers} 
                         onCheckedChange={(checked) => {
-                          setFormatNumbers(checked === true);
-                          setTimeout(() => applyFilters(), 0);
+                          handleCheckboxChange(setFormatNumbers, checked === true);
                         }}
                       />
                       <Label htmlFor="formatNumbers">Corrigir formato (5562982221100)</Label>
@@ -179,8 +219,7 @@ const Index = () => {
                         id="removeInvalid" 
                         checked={removeInvalid} 
                         onCheckedChange={(checked) => {
-                          setRemoveInvalid(checked === true);
-                          setTimeout(() => applyFilters(), 0);
+                          handleCheckboxChange(setRemoveInvalid, checked === true);
                         }}
                       />
                       <Label htmlFor="removeInvalid">Remover números inválidos</Label>
@@ -188,7 +227,7 @@ const Index = () => {
                   </div>
 
                   <div className="space-y-4">
-                    <h3 className="font-medium">Filtro por Data</h3>
+                    <h3 className="font-medium">Filtro por Período</h3>
                     <div>
                       <Popover>
                         <PopoverTrigger asChild>
@@ -196,36 +235,48 @@ const Index = () => {
                             variant="outline"
                             className={cn(
                               "w-full justify-start text-left font-normal",
-                              !dateFilter && "text-muted-foreground"
+                              !dateRange.from && !dateRange.to && "text-muted-foreground"
                             )}
                           >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {dateFilter ? format(dateFilter, "dd/MM/yyyy") : <span>Selecione a data</span>}
+                            <CalendarRange className="mr-2 h-4 w-4" />
+                            {dateRange.from || dateRange.to ? (
+                              <>
+                                {dateRange.from ? format(dateRange.from, "dd/MM/yyyy") : "Início"}
+                                {" - "}
+                                {dateRange.to ? format(dateRange.to, "dd/MM/yyyy") : "Fim"}
+                              </>
+                            ) : (
+                              <span>Selecione o período</span>
+                            )}
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
+                        <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
-                            mode="single"
-                            selected={dateFilter}
-                            onSelect={(date) => {
-                              setDateFilter(date);
-                              setTimeout(() => applyFilters(), 0);
+                            mode="range"
+                            selected={{
+                              from: dateRange.from,
+                              to: dateRange.to
                             }}
+                            onSelect={(range) => {
+                              setDateRange(range || { from: undefined, to: undefined });
+                              setFilterApplied(true);
+                            }}
+                            numberOfMonths={2}
                             className="p-3 pointer-events-auto"
                           />
                         </PopoverContent>
                       </Popover>
-                      {dateFilter && (
+                      {(dateRange.from || dateRange.to) && (
                         <Button 
                           variant="outline" 
                           size="sm" 
                           className="mt-2"
                           onClick={() => {
-                            setDateFilter(undefined);
-                            setTimeout(() => applyFilters(), 0);
+                            setDateRange({ from: undefined, to: undefined });
+                            setFilterApplied(true);
                           }}
                         >
-                          Limpar data
+                          Limpar período
                         </Button>
                       )}
                     </div>
@@ -251,7 +302,7 @@ const Index = () => {
                           variant="outline" 
                           onClick={() => {
                             setRegexFilter("");
-                            setTimeout(() => applyFilters(), 0);
+                            setFilterApplied(true);
                           }}
                         >
                           Limpar
@@ -264,9 +315,11 @@ const Index = () => {
                 <Separator className="my-6" />
 
                 <div className="flex justify-between items-center">
-                  <p className="text-sm text-gray-500">
-                    {displayData.length} de {data.length} registros exibidos
-                  </p>
+                  <div className="text-sm text-gray-500 space-y-1">
+                    <p><strong>Total de registros:</strong> {data.length}</p>
+                    <p><strong>Registros filtrados:</strong> {displayData.length}</p>
+                    <p><strong>Registros exibidos:</strong> {Math.min(visibleRows, displayData.length)}</p>
+                  </div>
                   <Button 
                     onClick={exportPhoneNumbers}
                     variant="default"
