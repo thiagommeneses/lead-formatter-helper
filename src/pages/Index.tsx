@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -176,7 +175,7 @@ const Index = () => {
     let csvContent = "celular;sms\n";
     
     phoneNumbers.forEach(number => {
-      csvContent += `${number};"${smsText}"\n`;
+      csvContent += `${number};${smsText}\n`;
     });
     
     const blob = new Blob([csvContent], { type: 'text/csv;charset=ansi' });
