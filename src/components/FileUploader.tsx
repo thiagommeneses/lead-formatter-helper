@@ -11,10 +11,11 @@ interface FileUploaderProps {
 const FileUploader: React.FC<FileUploaderProps> = ({ onFileUploaded }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [fileName, setFileName] = useState("");
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const processFile = (file: File) => {
     if (!file) return;
     
     setFileName(file.name);
@@ -57,6 +58,13 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileUploaded }) => {
     reader.readAsText(file);
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processFile(file);
+    }
+  };
+
   // Helper function to handle commas in quoted values
   const parseCSVRow = (row: string): string[] => {
     const result: string[] = [];
@@ -84,9 +92,52 @@ const FileUploader: React.FC<FileUploaderProps> = ({ onFileUploaded }) => {
     fileInputRef.current?.click();
   };
 
+  // Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
+        processFile(file);
+      } else {
+        toast.error("Por favor, selecione um arquivo CSV válido");
+      }
+    }
+  };
+
   return (
     <div className="flex flex-col items-center">
-      <div className="w-full border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:border-blue-500 transition-colors" onClick={triggerFileInput}>
+      <div
+        ref={dropZoneRef}
+        className={`w-full border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors
+          ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-500'}`}
+        onClick={triggerFileInput}
+        onDragOver={handleDragOver}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         <input
           type="file"
           ref={fileInputRef}
