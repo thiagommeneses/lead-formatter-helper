@@ -65,6 +65,7 @@ export function isValidBrazilianNumber(phoneNumber: string): boolean {
 
 /**
  * Extracts all unique valid phone numbers from lead data
+ * Filters out invalid and blank phone numbers
  */
 export function extractPhoneNumbers(data: any[]): string[] {
   const numbers = new Set<string>();
@@ -72,9 +73,16 @@ export function extractPhoneNumbers(data: any[]): string[] {
   data.forEach(row => {
     // Try to get phone from Celular or Telefone fields
     const phoneNumber = row['Celular'] || row['Telefone'];
-    if (phoneNumber && isValidBrazilianNumber(phoneNumber)) {
-      // Use cleaned number
-      numbers.add(formatPhoneNumber(phoneNumber));
+    
+    // Skip empty/blank phone numbers
+    if (!phoneNumber || phoneNumber.trim() === '') {
+      return;
+    }
+    
+    // Only add valid numbers
+    const formattedNumber = formatPhoneNumber(phoneNumber);
+    if (formattedNumber && isValidBrazilianNumber(formattedNumber)) {
+      numbers.add(formattedNumber);
     }
   });
   
