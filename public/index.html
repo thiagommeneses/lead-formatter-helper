@@ -1,0 +1,460 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Formatador de Leads</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            border-radius: 5px;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #2c5282;
+        }
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .card-header {
+            margin-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .card-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin: 0;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 5px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        .upload-area:hover {
+            border-color: #2c5282;
+        }
+        .options {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .option-group {
+            margin-bottom: 20px;
+        }
+        .option-title {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .option-item {
+            margin-bottom: 8px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        button {
+            background-color: #4299e1;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #3182ce;
+        }
+        button.secondary {
+            background-color: #f7fafc;
+            color: #4a5568;
+            border: 1px solid #e2e8f0;
+        }
+        button.secondary:hover {
+            background-color: #edf2f7;
+        }
+        input[type="text"], input[type="date"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Formatador de Leads</h1>
+        
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Carregar Arquivo CSV</h2>
+            </div>
+            <div class="card-content">
+                <form id="uploadForm" enctype="multipart/form-data" action="process.php" method="post">
+                    <div class="upload-area" id="drop-area">
+                        <p>Clique para selecionar ou arraste um arquivo CSV</p>
+                        <input type="file" name="csvFile" id="fileInput" accept=".csv" class="hidden">
+                        <p id="fileName" class="hidden"></p>
+                    </div>
+                    <button type="button" id="uploadButton">Carregar arquivo CSV</button>
+                </form>
+            </div>
+        </div>
+        
+        <div id="optionsCard" class="card hidden">
+            <div class="card-header">
+                <h2 class="card-title">Opções e Filtros</h2>
+            </div>
+            <div class="card-content">
+                <div class="options">
+                    <div class="option-group">
+                        <h3 class="option-title">Processamento de Números</h3>
+                        <div class="option-item">
+                            <input type="checkbox" id="removeDuplicates">
+                            <label for="removeDuplicates">Remover duplicados</label>
+                        </div>
+                        <div class="option-item">
+                            <input type="checkbox" id="formatNumbers">
+                            <label for="formatNumbers">Corrigir formato (5562982221100)</label>
+                        </div>
+                        <div class="option-item">
+                            <input type="checkbox" id="removeInvalid">
+                            <label for="removeInvalid">Remover números inválidos</label>
+                        </div>
+                    </div>
+                    
+                    <div class="option-group">
+                        <h3 class="option-title">Filtro por Data</h3>
+                        <div class="option-item">
+                            <input type="date" id="dateFilter">
+                            <button type="button" id="clearDateBtn" class="secondary">Limpar data</button>
+                        </div>
+                    </div>
+                    
+                    <div class="option-group">
+                        <h3 class="option-title">Filtro por Identificador (Regex)</h3>
+                        <div class="option-item">
+                            <input type="text" id="regexFilter" placeholder="Ex: formulario|conversão">
+                            <button type="button" id="applyRegexBtn">Aplicar Filtro</button>
+                            <button type="button" id="clearRegexBtn" class="secondary">Limpar</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <hr style="margin: 20px 0;">
+                
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <p id="recordsInfo">0 de 0 registros exibidos</p>
+                    <button type="button" id="exportBtn">Exportar Números</button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="dataCard" class="card hidden">
+            <div class="card-header">
+                <h2 class="card-title">Dados do CSV</h2>
+            </div>
+            <div class="card-content">
+                <div id="tableContainer"></div>
+                <div id="loadMoreContainer" style="text-align: center; margin-top: 20px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let allData = [];
+        let filteredData = [];
+        let headers = [];
+        let visibleRows = 10;
+        
+        // DOM elements
+        const dropArea = document.getElementById('drop-area');
+        const fileInput = document.getElementById('fileInput');
+        const uploadButton = document.getElementById('uploadButton');
+        const fileName = document.getElementById('fileName');
+        const optionsCard = document.getElementById('optionsCard');
+        const dataCard = document.getElementById('dataCard');
+        const tableContainer = document.getElementById('tableContainer');
+        const loadMoreContainer = document.getElementById('loadMoreContainer');
+        const recordsInfo = document.getElementById('recordsInfo');
+        
+        // Option elements
+        const removeDuplicatesCheckbox = document.getElementById('removeDuplicates');
+        const formatNumbersCheckbox = document.getElementById('formatNumbers');
+        const removeInvalidCheckbox = document.getElementById('removeInvalid');
+        const dateFilterInput = document.getElementById('dateFilter');
+        const clearDateBtn = document.getElementById('clearDateBtn');
+        const regexFilterInput = document.getElementById('regexFilter');
+        const applyRegexBtn = document.getElementById('applyRegexBtn');
+        const clearRegexBtn = document.getElementById('clearRegexBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        
+        // Event listeners
+        dropArea.addEventListener('click', () => fileInput.click());
+        uploadButton.addEventListener('click', () => fileInput.click());
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                const file = e.target.files[0];
+                fileName.textContent = `Arquivo selecionado: ${file.name}`;
+                fileName.classList.remove('hidden');
+                uploadFile(file);
+            }
+        });
+        
+        // Options event listeners
+        removeDuplicatesCheckbox.addEventListener('change', applyFilters);
+        formatNumbersCheckbox.addEventListener('change', applyFilters);
+        removeInvalidCheckbox.addEventListener('change', applyFilters);
+        dateFilterInput.addEventListener('change', applyFilters);
+        clearDateBtn.addEventListener('click', () => {
+            dateFilterInput.value = '';
+            applyFilters();
+        });
+        applyRegexBtn.addEventListener('click', applyFilters);
+        clearRegexBtn.addEventListener('click', () => {
+            regexFilterInput.value = '';
+            applyFilters();
+        });
+        exportBtn.addEventListener('click', exportPhoneNumbers);
+        
+        // Functions
+        function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('csvFile', file);
+            
+            fetch('process.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(`Erro: ${data.error}`);
+                    return;
+                }
+                
+                allData = data.data;
+                headers = data.headers;
+                
+                optionsCard.classList.remove('hidden');
+                dataCard.classList.remove('hidden');
+                
+                applyFilters();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Ocorreu um erro ao processar o arquivo.');
+            });
+        }
+        
+        function applyFilters() {
+            filteredData = [...allData];
+            
+            // Apply date filter
+            const dateValue = dateFilterInput.value;
+            if (dateValue) {
+                filteredData = filteredData.filter(row => {
+                    if (!row['Data da Conversão']) return false;
+                    return row['Data da Conversão'].startsWith(dateValue);
+                });
+            }
+            
+            // Apply regex filter
+            const regexValue = regexFilterInput.value.trim();
+            if (regexValue) {
+                try {
+                    const regex = new RegExp(regexValue, 'i');
+                    filteredData = filteredData.filter(row => {
+                        if (!row['Identificador']) return false;
+                        return regex.test(row['Identificador']);
+                    });
+                } catch (e) {
+                    alert('Expressão regular inválida');
+                }
+            }
+            
+            // Process phone numbers
+            if (formatNumbersCheckbox.checked || removeDuplicatesCheckbox.checked || removeInvalidCheckbox.checked) {
+                const processedNumbers = new Set();
+                
+                filteredData = filteredData.filter(row => {
+                    const phoneNumber = row['Celular'] || row['Telefone'];
+                    if (!phoneNumber) return true;
+                    
+                    let formattedNumber = phoneNumber;
+                    if (formatNumbersCheckbox.checked) {
+                        formattedNumber = formatPhoneNumber(phoneNumber);
+                        row['Celular'] = formattedNumber;
+                    }
+                    
+                    // Check if valid
+                    if (removeInvalidCheckbox.checked && !isValidBrazilianNumber(formattedNumber)) {
+                        return false;
+                    }
+                    
+                    // Check for duplicates
+                    if (removeDuplicatesCheckbox.checked) {
+                        if (processedNumbers.has(formattedNumber)) {
+                            return false;
+                        }
+                        processedNumbers.add(formattedNumber);
+                    }
+                    
+                    return true;
+                });
+            }
+            
+            visibleRows = 10;
+            renderTable();
+            updateRecordsInfo();
+        }
+        
+        function renderTable() {
+            const dataToDisplay = filteredData.slice(0, visibleRows);
+            
+            let tableHtml = `<table>
+                <thead>
+                    <tr>
+                        ${headers.map(header => `<th>${header}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>`;
+            
+            dataToDisplay.forEach(row => {
+                tableHtml += '<tr>';
+                headers.forEach(header => {
+                    tableHtml += `<td>${row[header] || ''}</td>`;
+                });
+                tableHtml += '</tr>';
+            });
+            
+            tableHtml += '</tbody></table>';
+            
+            tableContainer.innerHTML = tableHtml;
+            
+            // Load more button
+            if (visibleRows < filteredData.length) {
+                const remaining = Math.min(10, filteredData.length - visibleRows);
+                loadMoreContainer.innerHTML = `
+                    <button type="button" id="loadMoreBtn">
+                        Carregar mais ${remaining} registros
+                    </button>
+                `;
+                document.getElementById('loadMoreBtn').addEventListener('click', loadMoreRows);
+            } else {
+                loadMoreContainer.innerHTML = '';
+            }
+        }
+        
+        function loadMoreRows() {
+            visibleRows += 10;
+            renderTable();
+            updateRecordsInfo();
+        }
+        
+        function updateRecordsInfo() {
+            recordsInfo.textContent = `${Math.min(visibleRows, filteredData.length)} de ${allData.length} registros exibidos`;
+        }
+        
+        function exportPhoneNumbers() {
+            const phoneNumbers = [];
+            
+            filteredData.forEach(row => {
+                const phoneNumber = row['Celular'] || row['Telefone'];
+                if (phoneNumber && isValidBrazilianNumber(formatPhoneNumber(phoneNumber))) {
+                    const formattedNumber = formatPhoneNumber(phoneNumber);
+                    if (!phoneNumbers.includes(formattedNumber)) {
+                        phoneNumbers.push(formattedNumber);
+                    }
+                }
+            });
+            
+            // Create form to post to PHP endpoint for proper ANSI export
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = 'process.php';
+            
+            const exportInput = document.createElement('input');
+            exportInput.type = 'hidden';
+            exportInput.name = 'export';
+            exportInput.value = 'true';
+            
+            const numbersInput = document.createElement('input');
+            numbersInput.type = 'hidden';
+            numbersInput.name = 'numbers';
+            numbersInput.value = JSON.stringify(phoneNumbers);
+            
+            form.appendChild(exportInput);
+            form.appendChild(numbersInput);
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
+        }
+        
+        // Utility functions
+        function formatPhoneNumber(phoneNumber) {
+            // Remove all non-digit characters
+            let digitsOnly = phoneNumber.replace(/\D/g, '');
+            
+            // If it's empty, return empty string
+            if (!digitsOnly) return '';
+            
+            // If it doesn't start with 55 (Brazil), add it
+            if (!digitsOnly.startsWith('55')) {
+                digitsOnly = '55' + digitsOnly;
+            }
+            
+            return digitsOnly;
+        }
+        
+        function isValidBrazilianNumber(phoneNumber) {
+            // First clean the number
+            const cleaned = phoneNumber.replace(/\D/g, '');
+            
+            // Check if it's empty
+            if (!cleaned) return false;
+            
+            // Check proper format: must start with 55, followed by DDD (2 digits), followed by 9 digits
+            return /^55\d{10,11}$/.test(cleaned);
+        }
+    </script>
+</body>
+</html>
