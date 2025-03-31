@@ -33,7 +33,8 @@ export function isValidBrazilianNumber(phoneNumber: string): boolean {
   if (!cleaned) return false;
   
   // Check proper format: must start with 55, followed by DDD (2 digits), followed by 9 digits
-  if (!/^55\d{10,11}$/.test(cleaned)) {
+  // Must be exactly 13 digits for a valid Brazilian mobile number
+  if (cleaned.length !== 13 || !cleaned.startsWith('55')) {
     return false;
   }
   
@@ -79,9 +80,11 @@ export function extractPhoneNumbers(data: any[]): string[] {
       return;
     }
     
-    // Only add valid numbers
+    // Format the number first
     const formattedNumber = formatPhoneNumber(phoneNumber);
-    if (formattedNumber && isValidBrazilianNumber(formattedNumber)) {
+    
+    // Only add numbers that are valid AND exactly 13 digits (valid Brazilian mobile numbers)
+    if (formattedNumber && isValidBrazilianNumber(formattedNumber) && formattedNumber.length === 13) {
       numbers.add(formattedNumber);
     }
   });
