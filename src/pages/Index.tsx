@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -142,6 +143,7 @@ const Index = () => {
   };
 
   const exportPhoneNumbers = () => {
+    // Get all unique, valid phone numbers from the entire filtered dataset
     const phoneNumbers = extractPhoneNumbers(displayData);
     
     const csvContent = "fullNumber\n" + phoneNumbers.join("\n");
@@ -168,6 +170,7 @@ const Index = () => {
       return;
     }
     
+    // Get all unique, valid phone numbers from the entire filtered dataset
     const phoneNumbers = extractPhoneNumbers(displayData);
     
     let csvContent = "celular;sms\n";
