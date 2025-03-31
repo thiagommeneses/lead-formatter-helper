@@ -38,8 +38,14 @@ const EnhancedDataTable: React.FC<EnhancedDataTableProps> = ({
   const headers = showAllColumns ? allHeaders : essentialColumns.filter(col => allHeaders.includes(col));
 
   // Enhanced cell renderer for phone numbers
-  const renderPhoneCell = (value: string) => {
-    if (!value) return '';
+  const renderPhoneCell = (value: string, row: any, fieldName: string) => {
+    if (!value) {
+      // Se o campo Celular está vazio mas o Telefone não está, use o Telefone
+      if (fieldName === 'Celular' && row['Telefone'] && row['Telefone'].trim() !== '') {
+        return renderPhoneCell(row['Telefone'], row, 'Telefone');
+      }
+      return <span className="text-gray-400">-</span>;
+    }
     
     const issue = validateBrazilianPhoneNumber(value);
     const displayValue = formatPhoneNumberForDisplay(value);
@@ -93,7 +99,7 @@ const EnhancedDataTable: React.FC<EnhancedDataTableProps> = ({
               {headers.map((header, colIndex) => (
                 <TableCell key={colIndex} className="max-w-xs truncate">
                   {(header === 'Celular' || header === 'Telefone') 
-                    ? renderPhoneCell(row[header])
+                    ? renderPhoneCell(row[header], row, header)
                     : row[header]}
                 </TableCell>
               ))}

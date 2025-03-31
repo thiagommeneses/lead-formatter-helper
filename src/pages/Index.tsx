@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +7,7 @@ import {
   Download, 
   FileSpreadsheet, 
   AlertTriangle, 
-  Filter, 
+  Filter as FilterIcon, 
   Phone, 
   CheckCircle, 
   X, 
@@ -108,7 +107,6 @@ const Index = () => {
     toast.info(`Carregando ${csvData.length} registros...`);
     setData(csvData);
     
-    // Check if the file contains phone numbers
     const hasPhoneNumbers = csvData.some(row => 
       (row['Celular'] && row['Celular'].trim() !== '') || 
       (row['Telefone'] && row['Telefone'].trim() !== '')
@@ -118,7 +116,6 @@ const Index = () => {
       toast.warning("O arquivo não contém números de telefone válidos");
     }
     
-    // Process in chunks to avoid UI freezing with large data
     await processDataInChunks<Lead, void>(
       csvData,
       () => {},
@@ -144,7 +141,6 @@ const Index = () => {
   }, [filterApplied]);
 
   useEffect(() => {
-    // When display data changes, update the visible data
     updateVisibleData();
   }, [displayData, visibleItemsCount]);
 
@@ -157,7 +153,6 @@ const Index = () => {
       setShowLoadMore(visibleItemsCount < displayData.length && visibleItemsCount < 15);
     }
     
-    // If we need pagination (more than 15 items)
     if (displayData.length > 15) {
       const result = paginateData(displayData.slice(15), currentPage, 10);
       setTotalPages(result.totalPages);
@@ -169,7 +164,6 @@ const Index = () => {
   const loadMoreItems = () => {
     const newCount = Math.min(visibleItemsCount + 5, 15);
     setVisibleItemsCount(newCount);
-    // Check if we need to show the load more button
     setShowLoadMore(newCount < displayData.length && newCount < 15);
   };
 
@@ -191,10 +185,8 @@ const Index = () => {
       validPhoneNumbers: 0
     };
 
-    // Apply basic filters
     let filteredData = [...sourceData];
     
-    // Date range filter
     if (dateRange.from || dateRange.to) {
       filteredData = filteredData.filter(row => {
         if (!row['Data da Conversão']) return false;
@@ -217,7 +209,6 @@ const Index = () => {
       });
     }
 
-    // Regex filter
     if (regexFilter.trim()) {
       try {
         const regexPatterns = regexFilter.split('|').map(pattern => new RegExp(pattern.trim(), 'i'));
@@ -230,7 +221,6 @@ const Index = () => {
       }
     }
 
-    // Remove empty phone numbers
     if (removeEmpty) {
       filteredData = filteredData.filter(row => {
         const phoneNumber = row['Celular'] || row['Telefone'];
@@ -238,48 +228,39 @@ const Index = () => {
       });
     }
 
-    // For number formatting, duplicates and validation, process in chunks
     if (formatNumbers || removeDuplicates || removeInvalid) {
       const processedNumbers = new Set<string>();
       const invalidCount = { value: 0 };
       const duplicateCount = { value: 0 };
       
-      // Create a new filtered dataset with chunked processing
       filteredData = await filterDataInChunks<Lead>(
         filteredData,
         (row) => {
-          // Get phone from Celular or Telefone fields
           let phoneNumber = row['Celular'] || row['Telefone'];
-          if (!phoneNumber) return true; // Keep rows without phone numbers
+          if (!phoneNumber) return true;
           
-          // Format the phone number if requested
           const formattedNumber = formatNumbers ? formatPhoneNumber(phoneNumber) : phoneNumber;
           
-          // Check for invalid numbers
           if (!isValidBrazilianNumber(formattedNumber)) {
             invalidCount.value++;
-            return !removeInvalid; // Remove if removeInvalid is true
+            return !removeInvalid;
           }
           
-          // Check for duplicates
           if (processedNumbers.has(formattedNumber)) {
             duplicateCount.value++;
-            return !removeDuplicates; // Remove if removeDuplicates is true
+            return !removeDuplicates;
           }
           
-          // Store the processed number
           processedNumbers.add(formattedNumber);
           return true;
         },
         (row) => {
-          // Format the phone number in the row if needed
           if (formatNumbers) {
             const phoneNumber = row['Celular'] || row['Telefone'];
             if (phoneNumber) {
-              // If Celular is empty, use Telefone field
               if (!row['Celular'] || row['Celular'].trim() === '') {
                 row['Celular'] = formatPhoneNumber(phoneNumber);
-                row['Telefone'] = ''; // Clean up secondary phone field
+                row['Telefone'] = '';
               } else {
                 row['Celular'] = formatPhoneNumber(row['Celular']);
               }
@@ -298,7 +279,6 @@ const Index = () => {
       stats.duplicateNumbers = duplicateCount.value;
       stats.validPhoneNumbers = processedNumbers.size - invalidCount.value;
     } else {
-      // Simple count of valid numbers
       const validNumbers = new Set<string>();
       filteredData.forEach(row => {
         const phoneNumber = row['Celular'] || row['Telefone'];
@@ -313,8 +293,8 @@ const Index = () => {
     stats.filteredRecords = filteredData.length;
     setFilterStats(stats);
     setDisplayData(filteredData);
-    setVisibleItemsCount(5); // Reset to initial 5 items
-    setCurrentPage(1); // Reset to first page when filters change
+    setVisibleItemsCount(5);
+    setCurrentPage(1);
     setIsLoading(false);
     
     toast.success("Filtros aplicados com sucesso!");
@@ -440,7 +420,7 @@ const Index = () => {
                   onClick={() => setShowFilters(!showFilters)}
                   className="flex items-center"
                 >
-                  <Filter className="mr-1 h-4 w-4" />
+                  <FilterIcon className="mr-1 h-4 w-4" />
                   Filtros
                   {showFilters ? <X className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />}
                 </Button>
@@ -451,27 +431,27 @@ const Index = () => {
               </div>
               
               <div className="flex flex-wrap items-center gap-2">
-                <Button 
-                  onClick={handleOmnichatExport} 
-                  variant="outline"
-                  size="sm"
-                  disabled={displayData.length === 0}
-                  className="flex items-center"
-                >
-                  <Download className="mr-1 h-4 w-4" />
-                  Exportar Para Omnichat
-                </Button>
-                
-                <Button 
-                  onClick={handleZenviaExport}
-                  variant="default"
-                  size="sm"
-                  className="bg-green-600 hover:bg-green-700 flex items-center"
-                  disabled={displayData.length === 0}
-                >
-                  <MessageSquare className="mr-1 h-4 w-4" />
-                  Exportar Para Zenvia
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      disabled={displayData.length === 0}
+                      className="flex items-center"
+                    >
+                      <Download className="mr-1 h-4 w-4" />
+                      Exportar
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleOmnichatExport}>
+                      Exportar Para Omnichat
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleZenviaExport}>
+                      Exportar Para Zenvia
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 
                 <Button 
                   onClick={resetData}
@@ -484,38 +464,40 @@ const Index = () => {
                 </Button>
               </div>
             </div>
-            
-            {showFilters && (
-              <div className="mt-3 p-3 border border-gray-200 rounded-md">
-                <FilterOptions 
-                  removeDuplicates={removeDuplicates}
-                  setRemoveDuplicates={setRemoveDuplicates}
-                  formatNumbers={formatNumbers}
-                  setFormatNumbers={setFormatNumbers}
-                  removeInvalid={removeInvalid}
-                  setRemoveInvalid={setRemoveInvalid}
-                  removeEmpty={removeEmpty}
-                  setRemoveEmpty={setRemoveEmpty}
-                  showAllColumns={showAllColumns}
-                  setShowAllColumns={setShowAllColumns}
-                  dateRange={dateRange}
-                  setDateRange={setDateRange}
-                  regexFilter={regexFilter}
-                  setRegexFilter={setRegexFilter}
-                  applyFilters={() => applyFilters()}
-                  setFilterApplied={setFilterApplied}
-                />
-                
-                <div className="mt-3">
-                  <FilterStatistics 
-                    filterStats={filterStats}
-                    displayData={displayData}
-                    visibleRows={visibleData.length}
-                    validPhoneCount={extractPhoneNumbers(displayData).length}
-                  />
-                </div>
-              </div>
-            )}
+          </div>
+        )}
+
+        {isCSVLoaded && !isLoading && (
+          <div className="mb-4">
+            <FilterStatistics 
+              filterStats={filterStats}
+              displayData={displayData}
+              visibleRows={visibleData.length}
+              validPhoneCount={extractPhoneNumbers(displayData).length}
+            />
+          </div>
+        )}
+        
+        {showFilters && isCSVLoaded && !isLoading && (
+          <div className="mb-4">
+            <FilterOptions 
+              removeDuplicates={removeDuplicates}
+              setRemoveDuplicates={setRemoveDuplicates}
+              formatNumbers={formatNumbers}
+              setFormatNumbers={setFormatNumbers}
+              removeInvalid={removeInvalid}
+              setRemoveInvalid={setRemoveInvalid}
+              removeEmpty={removeEmpty}
+              setRemoveEmpty={setRemoveEmpty}
+              showAllColumns={showAllColumns}
+              setShowAllColumns={setShowAllColumns}
+              dateRange={dateRange}
+              setDateRange={setDateRange}
+              regexFilter={regexFilter}
+              setRegexFilter={setRegexFilter}
+              applyFilters={() => applyFilters()}
+              setFilterApplied={setFilterApplied}
+            />
           </div>
         )}
 
