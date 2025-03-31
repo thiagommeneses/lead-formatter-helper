@@ -1,4 +1,6 @@
 
+import { validBrazilianDDDs } from '../utils/phoneUtils';
+
 /**
  * Enum representing validation issues for Brazilian phone numbers
  */
@@ -38,7 +40,6 @@ export function validateBrazilianPhoneNumber(phoneNumber: string): PhoneValidati
   const ddd = cleaned.substring(2, 4);
   
   // Check for valid DDD using our comprehensive list
-  import { validBrazilianDDDs } from '@/utils/phoneUtils';
   if (!validBrazilianDDDs.includes(ddd)) {
     return PhoneValidationIssue.INVALID_DDD;
   }
