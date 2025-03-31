@@ -4,15 +4,24 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 interface DataTableProps {
   data: any[];
+  showAllColumns?: boolean;
+  essentialColumns?: string[];
 }
 
-const DataTable: React.FC<DataTableProps> = ({ data }) => {
+const DataTable: React.FC<DataTableProps> = ({ 
+  data,
+  showAllColumns = true,
+  essentialColumns = ["Data da Conversão", "Identificador", "Celular"]
+}) => {
   if (!data || data.length === 0) {
     return <div className="text-center p-4 text-gray-500">Nenhum dado disponível</div>;
   }
 
   // Get all headers from the first row
-  const headers = Object.keys(data[0]);
+  const allHeaders = Object.keys(data[0]);
+  
+  // Determine which headers to display
+  const headers = showAllColumns ? allHeaders : essentialColumns.filter(col => allHeaders.includes(col));
 
   return (
     <div className="overflow-x-auto">

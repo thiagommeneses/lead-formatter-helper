@@ -40,6 +40,14 @@ interface DateRange {
   to?: Date | undefined;
 }
 
+interface FilterStats {
+  totalRecords: number;
+  filteredRecords: number;
+  invalidNumbers: number;
+  duplicateNumbers: number;
+  validPhoneNumbers: number;
+}
+
 const Index = () => {
   const [data, setData] = useState<Lead[]>([]);
   const [displayData, setDisplayData] = useState<Lead[]>([]);
@@ -53,6 +61,14 @@ const Index = () => {
   const [filterApplied, setFilterApplied] = useState(false);
   const [showSmsDialog, setShowSmsDialog] = useState(false);
   const [smsText, setSmsText] = useState("");
+  const [showAllColumns, setShowAllColumns] = useState(true);
+  const [filterStats, setFilterStats] = useState<FilterStats>({
+    totalRecords: 0,
+    filteredRecords: 0,
+    invalidNumbers: 0,
+    duplicateNumbers: 0,
+    validPhoneNumbers: 0
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = (csvData: Lead[]) => {
@@ -71,6 +87,13 @@ const Index = () => {
 
   const applyFilters = (sourceData: Lead[] = data) => {
     let filteredData = [...sourceData];
+    const stats: FilterStats = {
+      totalRecords: sourceData.length,
+      filteredRecords: 0,
+      invalidNumbers: 0,
+      duplicateNumbers: 0,
+      validPhoneNumbers: 0
+    };
 
     if (dateRange.from || dateRange.to) {
       filteredData = filteredData.filter(row => {
@@ -99,10 +122,11 @@ const Index = () => {
 
     if (regexFilter.trim()) {
       try {
-        const regexPattern = new RegExp(regexFilter, 'i');
-        filteredData = filteredData.filter(row => 
-          regexPattern.test(row['Identificador'] || '')
-        );
+        const regexPatterns = regexFilter.split('|').map(pattern => new RegExp(pattern.trim(), 'i'));
+        
+        filteredData = filteredData.filter(row => {
+          return regexPatterns.some(pattern => pattern.test(row['Identificador'] || ''));
+        });
       } catch (error) {
         toast.error("Expressão regular inválida");
       }
@@ -110,6 +134,8 @@ const Index = () => {
 
     if (formatNumbers || removeDuplicates || removeInvalid) {
       const processedNumbers = new Set<string>();
+      const invalidCount = { value: 0 };
+      const duplicateCount = { value: 0 };
       
       filteredData = filteredData.filter(row => {
         const phoneNumber = row['Celular'] || row['Telefone'];
@@ -118,21 +144,31 @@ const Index = () => {
         const formattedNumber = formatNumbers ? formatPhoneNumber(phoneNumber) : phoneNumber;
         row['Celular'] = formattedNumber;
         
-        if (removeInvalid && !isValidBrazilianNumber(formattedNumber)) {
-          return false;
-        }
-        
-        if (removeDuplicates) {
-          if (processedNumbers.has(formattedNumber)) {
+        if (!isValidBrazilianNumber(formattedNumber)) {
+          invalidCount.value++;
+          if (removeInvalid) {
             return false;
           }
-          processedNumbers.add(formattedNumber);
         }
         
+        if (processedNumbers.has(formattedNumber)) {
+          duplicateCount.value++;
+          if (removeDuplicates) {
+            return false;
+          }
+        }
+        
+        processedNumbers.add(formattedNumber);
         return true;
       });
+
+      stats.invalidNumbers = invalidCount.value;
+      stats.duplicateNumbers = duplicateCount.value;
+      stats.validPhoneNumbers = processedNumbers.size - invalidCount.value;
     }
 
+    stats.filteredRecords = filteredData.length;
+    setFilterStats(stats);
     setDisplayData(filteredData);
     setVisibleRows(10);
   };
@@ -142,7 +178,6 @@ const Index = () => {
   };
 
   const exportPhoneNumbers = () => {
-    // Get all unique, valid phone numbers from the entire filtered dataset
     const phoneNumbers = extractPhoneNumbers(displayData);
     
     const csvContent = "fullNumber\n" + phoneNumbers.join("\n");
@@ -169,7 +204,6 @@ const Index = () => {
       return;
     }
     
-    // Get all unique, valid phone numbers from the entire filtered dataset
     const phoneNumbers = extractPhoneNumbers(displayData);
     
     let csvContent = "celular;sms\n";
@@ -254,6 +288,16 @@ const Index = () => {
                         }}
                       />
                       <Label htmlFor="removeInvalid">Remover números inválidos</Label>
+                    </div>
+                    <div className="flex items-center space-x-2 mt-4">
+                      <Checkbox 
+                        id="showAllColumns" 
+                        checked={showAllColumns} 
+                        onCheckedChange={(checked) => {
+                          setShowAllColumns(checked === true);
+                        }}
+                      />
+                      <Label htmlFor="showAllColumns">Exibir todas as colunas</Label>
                     </div>
                   </div>
 
@@ -345,11 +389,28 @@ const Index = () => {
 
                 <Separator className="my-6" />
 
+                <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                  <h3 className="font-medium mb-2">Estatísticas de Filtro</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <p><strong>Total de registros:</strong> {filterStats.totalRecords}</p>
+                      <p><strong>Registros filtrados:</strong> {filterStats.filteredRecords}</p>
+                      <p><strong>Registros exibidos:</strong> {Math.min(visibleRows, displayData.length)}</p>
+                    </div>
+                    <div>
+                      <p><strong>Números duplicados:</strong> {filterStats.duplicateNumbers}</p>
+                      <p><strong>Números inválidos:</strong> {filterStats.invalidNumbers}</p>
+                      <p><strong>Números válidos:</strong> {filterStats.validPhoneNumbers}</p>
+                    </div>
+                    <div>
+                      <p><strong>Telefones para exportação:</strong> {extractPhoneNumbers(displayData).length}</p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="flex justify-between items-center">
                   <div className="text-sm text-gray-500 space-y-1">
-                    <p><strong>Total de registros:</strong> {data.length}</p>
-                    <p><strong>Registros filtrados:</strong> {displayData.length}</p>
-                    <p><strong>Registros exibidos:</strong> {Math.min(visibleRows, displayData.length)}</p>
+                    <p>Use as opções acima para filtrar os dados.</p>
                   </div>
                   <div className="space-x-2">
                     <Button onClick={exportPhoneNumbers} variant="outline">
@@ -375,6 +436,8 @@ const Index = () => {
               <CardContent>
                 <DataTable 
                   data={displayData.slice(0, visibleRows)} 
+                  showAllColumns={showAllColumns}
+                  essentialColumns={["Data da Conversão", "Identificador", "Celular", "Nome"]}
                 />
                 
                 {visibleRows < displayData.length && (
