@@ -2,6 +2,7 @@
 import React from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge";
 import { formatPhoneNumberForDisplay } from '@/utils/phoneUtils';
 import { PhoneValidationIssue, validateBrazilianPhoneNumber, getValidationColor } from '@/utils/phoneValidation';
 
@@ -45,14 +46,26 @@ const EnhancedDataTable: React.FC<EnhancedDataTableProps> = ({
     const textColorClass = getValidationColor(issue);
     
     if (issue === PhoneValidationIssue.NONE) {
-      return <span className={textColorClass}>{displayValue}</span>;
+      return (
+        <div className="flex items-center">
+          <span className={textColorClass}>{displayValue}</span>
+          <Badge variant="outline" className="ml-2 bg-green-50 text-green-600 text-xs">
+            Válido
+          </Badge>
+        </div>
+      );
     }
     
     return (
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className={textColorClass}>{displayValue}</span>
+            <div className="flex items-center">
+              <span className={textColorClass}>{displayValue}</span>
+              <Badge variant="outline" className="ml-2 bg-red-50 text-red-600 text-xs">
+                Inválido
+              </Badge>
+            </div>
           </TooltipTrigger>
           <TooltipContent>
             <p>Problema: {issue}</p>

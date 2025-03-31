@@ -10,13 +10,24 @@ export function formatPhoneNumber(phoneNumber: string): string {
   // If it's empty, return empty string
   if (!digitsOnly) return '';
   
-  // If it doesn't start with 55 (Brazil), add it
-  if (!digitsOnly.startsWith('55')) {
+  // Handle different formats
+  if (digitsOnly.length === 11 && !digitsOnly.startsWith('55')) {
+    // Format is likely DDD + number without country code
+    digitsOnly = '55' + digitsOnly;
+  } else if (digitsOnly.length === 9) {
+    // Only the number, without DDD or country code
+    // Can't automatically format as we don't know the DDD
+    return digitsOnly;
+  } else if (!digitsOnly.startsWith('55') && digitsOnly.length >= 10) {
+    // Add Brazil country code
     digitsOnly = '55' + digitsOnly;
   }
   
-  // Make sure it has the right length for a Brazilian mobile (13 digits including country code)
-  // If it's too short or obviously invalid, return the cleaned number anyway
+  // Trim to standard 13 digits if longer
+  if (digitsOnly.length > 13) {
+    digitsOnly = digitsOnly.substring(0, 13);
+  }
+  
   return digitsOnly;
 }
 
@@ -76,6 +87,63 @@ export const validBrazilianDDDs = [
   // Maranhão
   '98', '99'
 ];
+
+/**
+ * Map of DDD codes to state names for display
+ */
+export const dddToState: Record<string, string> = {
+  // São Paulo
+  '11': 'SP', '12': 'SP', '13': 'SP', '14': 'SP', '15': 'SP', 
+  '16': 'SP', '17': 'SP', '18': 'SP', '19': 'SP',
+  // Rio de Janeiro
+  '21': 'RJ', '22': 'RJ', '24': 'RJ',
+  // Espírito Santo
+  '27': 'ES', '28': 'ES',
+  // Minas Gerais
+  '31': 'MG', '32': 'MG', '33': 'MG', '34': 'MG', '35': 'MG', '37': 'MG', '38': 'MG',
+  // Paraná
+  '41': 'PR', '42': 'PR', '43': 'PR', '44': 'PR', '45': 'PR', '46': 'PR',
+  // Santa Catarina
+  '47': 'SC', '48': 'SC', '49': 'SC',
+  // Rio Grande do Sul
+  '51': 'RS', '53': 'RS', '54': 'RS', '55': 'RS',
+  // Distrito Federal e Goiás
+  '61': 'DF/GO', '62': 'GO', '64': 'GO',
+  // Mato Grosso
+  '65': 'MT', '66': 'MT',
+  // Mato Grosso do Sul
+  '67': 'MS',
+  // Acre e Rondônia
+  '68': 'AC', '69': 'RO',
+  // Bahia
+  '71': 'BA', '73': 'BA', '74': 'BA', '75': 'BA', '77': 'BA',
+  // Sergipe
+  '79': 'SE',
+  // Pernambuco
+  '81': 'PE', '87': 'PE',
+  // Alagoas
+  '82': 'AL',
+  // Paraíba
+  '83': 'PB',
+  // Rio Grande do Norte
+  '84': 'RN',
+  // Ceará
+  '85': 'CE', '88': 'CE',
+  // Piauí
+  '86': 'PI', '89': 'PI',
+  // Pará
+  '91': 'PA', '93': 'PA', '94': 'PA',
+  // Amazonas
+  '92': 'AM', '97': 'AM',
+  // Roraima
+  '95': 'RR',
+  // Amapá
+  '96': 'AP',
+  // Tocantins
+  '63': 'TO',
+  // Maranhão
+  '98': 'MA', '99': 'MA'
+};
 
 /**
  * Checks if a phone number is valid Brazilian mobile number
@@ -156,17 +224,54 @@ export function formatPhoneNumberForDisplay(phoneNumber: string): string {
   const digitsOnly = phoneNumber.replace(/\D/g, '');
   
   // If it's empty or too short, return the original
-  if (!digitsOnly || digitsOnly.length < 12) return phoneNumber;
+  if (!digitsOnly || digitsOnly.length < 10) return phoneNumber;
   
-  // Format for display
+  // Format for display based on length
   try {
-    const countryCode = digitsOnly.substring(0, 2);
-    const ddd = digitsOnly.substring(2, 4);
-    const firstPart = digitsOnly.substring(4, 9);
-    const secondPart = digitsOnly.substring(9);
+    if (digitsOnly.length === 13 && digitsOnly.startsWith('55')) {
+      // Full format with country code
+      const countryCode = digitsOnly.substring(0, 2);
+      const ddd = digitsOnly.substring(2, 4);
+      const prefix = digitsOnly.substring(4, 9);
+      const suffix = digitsOnly.substring(9);
+      
+      return `+${countryCode} (${ddd}) ${prefix}-${suffix}`;
+    } else if (digitsOnly.length === 11) {
+      // DDD + number without country code
+      const ddd = digitsOnly.substring(0, 2);
+      const prefix = digitsOnly.substring(2, 7);
+      const suffix = digitsOnly.substring(7);
+      
+      return `(${ddd}) ${prefix}-${suffix}`;
+    } else if (digitsOnly.length === 9) {
+      // Just the number
+      const prefix = digitsOnly.substring(0, 5);
+      const suffix = digitsOnly.substring(5);
+      
+      return `${prefix}-${suffix}`;
+    }
     
-    return `+${countryCode} (${ddd}) ${firstPart}-${secondPart}`;
+    // For other formats, just return the cleaned digits
+    return digitsOnly;
   } catch (error) {
     return phoneNumber;
+  }
+}
+
+/**
+ * Get state name from phone number
+ */
+export function getStateFromPhoneNumber(phoneNumber: string): string | null {
+  try {
+    const cleaned = phoneNumber.replace(/\D/g, '');
+    
+    if (cleaned.length >= 4 && cleaned.startsWith('55')) {
+      const ddd = cleaned.substring(2, 4);
+      return dddToState[ddd] || null;
+    }
+    
+    return null;
+  } catch (error) {
+    return null;
   }
 }

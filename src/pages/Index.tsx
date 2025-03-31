@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, Download, FileSpreadsheet, AlertTriangle } from "lucide-react";
 import { toast } from 'sonner';
 import FileUploader from '@/components/FileUploader';
 import { formatPhoneNumber, isValidBrazilianNumber, extractPhoneNumbers } from '@/utils/phoneUtils';
@@ -20,7 +20,8 @@ import FilterOptions from '@/components/FilterOptions';
 import FilterStatistics from '@/components/FilterStatistics';
 import EnhancedDataTable from '@/components/EnhancedDataTable';
 import ExportPreview from '@/components/ExportPreview';
-import { paginateData, processDataInChunks } from '@/utils/dataLoader';
+import { paginateData, processDataInChunks, filterDataInChunks } from '@/utils/dataLoader';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface Lead {
   'Data da Conversão': string;
@@ -74,13 +75,33 @@ const Index = () => {
   const [showExportPreview, setShowExportPreview] = useState(false);
   const [exportType, setExportType] = useState<'omnichat' | 'zenvia'>('omnichat');
   const [phonesToExport, setPhonesToExport] = useState<string[]>([]);
+  const [processingProgress, setProcessingProgress] = useState(0);
   const pageSize = 50; // Page size for pagination
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = async (csvData: Lead[]) => {
     setIsLoading(true);
+    setProcessingProgress(0);
+    
+    if (csvData.length === 0) {
+      toast.error("O arquivo CSV não contém dados válidos");
+      setIsLoading(false);
+      return;
+    }
+    
+    toast.info(`Carregando ${csvData.length} registros...`);
     setData(csvData);
+    
+    // Check if the file contains phone numbers
+    const hasPhoneNumbers = csvData.some(row => 
+      (row['Celular'] && row['Celular'].trim() !== '') || 
+      (row['Telefone'] && row['Telefone'].trim() !== '')
+    );
+    
+    if (!hasPhoneNumbers) {
+      toast.warning("O arquivo não contém números de telefone válidos");
+    }
     
     // Process in chunks to avoid UI freezing with large data
     await processDataInChunks<Lead, void>(
@@ -88,7 +109,8 @@ const Index = () => {
       () => {},
       1000,
       (processed, total) => {
-        toast.info(`Processando dados: ${Math.round((processed/total)*100)}%`);
+        const progress = Math.round((processed/total)*100);
+        setProcessingProgress(progress);
       }
     );
     
@@ -117,8 +139,15 @@ const Index = () => {
   };
 
   const applyFilters = async (sourceData: Lead[] = data) => {
+    if (sourceData.length === 0) {
+      toast.error("Nenhum dado disponível para filtrar");
+      return;
+    }
+    
     setIsLoading(true);
-    let filteredData = [...sourceData];
+    setProcessingProgress(0);
+    toast.info("Aplicando filtros...");
+    
     const stats: FilterStats = {
       totalRecords: sourceData.length,
       filteredRecords: 0,
@@ -127,14 +156,10 @@ const Index = () => {
       validPhoneNumbers: 0
     };
 
-    // Remove rows with empty phone numbers if the option is selected
-    if (removeEmpty) {
-      filteredData = filteredData.filter(row => {
-        const phoneNumber = row['Celular'] || row['Telefone'];
-        return phoneNumber && phoneNumber.trim() !== '';
-      });
-    }
-
+    // Apply basic filters
+    let filteredData = [...sourceData];
+    
+    // Date range filter
     if (dateRange.from || dateRange.to) {
       filteredData = filteredData.filter(row => {
         if (!row['Data da Conversão']) return false;
@@ -157,6 +182,7 @@ const Index = () => {
       });
     }
 
+    // Regex filter
     if (regexFilter.trim()) {
       try {
         const regexPatterns = regexFilter.split('|').map(pattern => new RegExp(pattern.trim(), 'i'));
@@ -169,49 +195,77 @@ const Index = () => {
       }
     }
 
+    // Remove empty phone numbers
+    if (removeEmpty) {
+      filteredData = filteredData.filter(row => {
+        const phoneNumber = row['Celular'] || row['Telefone'];
+        return phoneNumber && phoneNumber.trim() !== '';
+      });
+    }
+
+    // For number formatting, duplicates and validation, process in chunks
     if (formatNumbers || removeDuplicates || removeInvalid) {
       const processedNumbers = new Set<string>();
       const invalidCount = { value: 0 };
       const duplicateCount = { value: 0 };
       
-      // Process data in chunks for better performance
-      filteredData = await processDataInChunks<Lead, Lead>(
+      // Create a new filtered dataset with chunked processing
+      filteredData = await filterDataInChunks<Lead>(
         filteredData,
-        row => {
+        (row) => {
           const phoneNumber = row['Celular'] || row['Telefone'];
-          if (!phoneNumber) return row;
+          if (!phoneNumber) return true; // Keep rows without phone numbers
           
+          // Format the phone number if requested
           const formattedNumber = formatNumbers ? formatPhoneNumber(phoneNumber) : phoneNumber;
-          row['Celular'] = formattedNumber;
           
+          // Check for invalid numbers
           if (!isValidBrazilianNumber(formattedNumber)) {
             invalidCount.value++;
-            if (removeInvalid) {
-              return null as unknown as Lead;
-            }
+            return !removeInvalid; // Remove if removeInvalid is true
           }
           
+          // Check for duplicates
           if (processedNumbers.has(formattedNumber)) {
             duplicateCount.value++;
-            if (removeDuplicates) {
-              return null as unknown as Lead;
-            }
+            return !removeDuplicates; // Remove if removeDuplicates is true
           }
           
+          // Store the processed number
           processedNumbers.add(formattedNumber);
+          return true;
+        },
+        (row) => {
+          // Format the phone number in the row if needed
+          if (formatNumbers) {
+            const phoneNumber = row['Celular'] || row['Telefone'];
+            if (phoneNumber) {
+              row['Celular'] = formatPhoneNumber(phoneNumber);
+              row['Telefone'] = ''; // Clean up secondary phone field
+            }
+          }
           return row;
         },
         500,
         (processed, total) => {
-          if (total > 1000) {  // Only show progress for large datasets
-            toast.info(`Aplicando filtros: ${Math.round((processed/total)*100)}%`);
-          }
+          const progress = Math.round((processed/total)*100);
+          setProcessingProgress(progress);
         }
-      ).then(results => results.filter(Boolean) as Lead[]);
+      );
 
       stats.invalidNumbers = invalidCount.value;
       stats.duplicateNumbers = duplicateCount.value;
       stats.validPhoneNumbers = processedNumbers.size - invalidCount.value;
+    } else {
+      // Simple count of valid numbers
+      const validNumbers = new Set<string>();
+      filteredData.forEach(row => {
+        const phoneNumber = row['Celular'] || row['Telefone'];
+        if (phoneNumber && isValidBrazilianNumber(phoneNumber)) {
+          validNumbers.add(phoneNumber);
+        }
+      });
+      stats.validPhoneNumbers = validNumbers.size;
     }
 
     stats.filteredRecords = filteredData.length;
@@ -219,23 +273,43 @@ const Index = () => {
     setDisplayData(filteredData);
     setCurrentPage(1); // Reset to first page when filters change
     setIsLoading(false);
+    
+    toast.success("Filtros aplicados com sucesso!");
   };
 
   const handleOmnichatExport = () => {
     setExportType('omnichat');
     const phoneNumbers = extractPhoneNumbers(displayData);
+    
+    if (phoneNumbers.length === 0) {
+      toast.error("Nenhum número válido para exportação");
+      return;
+    }
+    
     setPhonesToExport(phoneNumbers);
     setShowExportPreview(true);
   };
 
   const handleZenviaExport = () => {
+    const phoneNumbers = extractPhoneNumbers(displayData);
+    
+    if (phoneNumbers.length === 0) {
+      toast.error("Nenhum número válido para exportação");
+      return;
+    }
+    
     setShowSmsDialog(true);
   };
 
   const exportPhoneNumbers = (selectedNumbers: string[]) => {
+    if (selectedNumbers.length === 0) {
+      toast.error("Nenhum número selecionado para exportação");
+      return;
+    }
+    
     const csvContent = "fullNumber\n" + selectedNumbers.join("\n");
     
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=ansi' });
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -264,6 +338,11 @@ const Index = () => {
   };
 
   const handleFinalExport = (selectedNumbers: string[]) => {
+    if (selectedNumbers.length === 0) {
+      toast.error("Nenhum número selecionado para exportação");
+      return;
+    }
+    
     if (exportType === 'omnichat') {
       exportPhoneNumbers(selectedNumbers);
     } else if (exportType === 'zenvia') {
@@ -272,7 +351,7 @@ const Index = () => {
         csvContent += `${number};${smsText}\n`;
       });
       
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=ansi' });
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -297,7 +376,10 @@ const Index = () => {
 
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Carregar Arquivo CSV</CardTitle>
+            <CardTitle className="flex items-center">
+              <FileSpreadsheet className="mr-2 h-5 w-5" />
+              Carregar Arquivo CSV
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <FileUploader onFileUploaded={handleFileUpload} />
@@ -305,16 +387,36 @@ const Index = () => {
         </Card>
 
         {isLoading && (
-          <div className="text-center p-4">
-            <p className="text-blue-600">Processando dados, por favor aguarde...</p>
+          <div className="text-center p-4 mb-4 bg-blue-50 rounded-lg border border-blue-100">
+            <p className="text-blue-600 mb-2">Processando dados, por favor aguarde...</p>
+            <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
+              <div 
+                className="bg-blue-600 h-2.5 rounded-full transition-all duration-300"
+                style={{ width: `${processingProgress}%` }}
+              ></div>
+            </div>
+            <p className="text-sm text-gray-500">{processingProgress}% concluído</p>
           </div>
+        )}
+
+        {data.length > 0 && !isCSVLoaded && !isLoading && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Erro ao processar o arquivo</AlertTitle>
+            <AlertDescription>
+              Ocorreu um erro ao processar o arquivo CSV. Por favor, verifique o formato e tente novamente.
+            </AlertDescription>
+          </Alert>
         )}
 
         {isCSVLoaded && !isLoading && (
           <>
             <Card className="mb-6">
               <CardHeader>
-                <CardTitle>Opções e Filtros</CardTitle>
+                <CardTitle className="flex items-center">
+                  <Filter className="mr-2 h-5 w-5" />
+                  Opções e Filtros
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <FilterOptions 
@@ -345,22 +447,25 @@ const Index = () => {
                   validPhoneCount={extractPhoneNumbers(displayData).length}
                 />
 
-                <div className="flex justify-between items-center">
-                  <div className="text-sm text-gray-500 space-y-1">
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-4">
+                  <div className="text-sm text-gray-500 space-y-1 text-center sm:text-left">
                     <p>Use as opções acima para filtrar os dados.</p>
+                    <p>Os números válidos serão exportados nos formatos escolhidos.</p>
                   </div>
-                  <div className="space-x-2">
+                  <div className="space-x-2 flex flex-wrap justify-center gap-2">
                     <Button 
                       onClick={handleOmnichatExport} 
                       variant="outline"
                       disabled={displayData.length === 0}
+                      className="flex items-center"
                     >
+                      <Download className="mr-2 h-4 w-4" />
                       Exportar Para Omnichat
                     </Button>
                     <Button 
                       onClick={handleZenviaExport}
                       variant="default"
-                      className="bg-green-600 hover:bg-green-700"
+                      className="bg-green-600 hover:bg-green-700 flex items-center"
                       disabled={displayData.length === 0}
                     >
                       <MessageSquare className="mr-2 h-4 w-4" />
@@ -373,7 +478,10 @@ const Index = () => {
 
             <Card>
               <CardHeader>
-                <CardTitle>Dados do CSV ({displayData.length} registros)</CardTitle>
+                <CardTitle className="flex items-center">
+                  <FileSpreadsheet className="mr-2 h-5 w-5" />
+                  Dados do CSV ({displayData.length} registros)
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <EnhancedDataTable 
@@ -408,7 +516,9 @@ const Index = () => {
                 maxLength={160}
               />
               <div className="text-right text-sm text-gray-500">
-                {smsText.length}/160 caracteres
+                <span className={smsText.length > 160 ? "text-red-500 font-bold" : ""}>
+                  {smsText.length}
+                </span>/160 caracteres
               </div>
             </div>
             <DialogFooter className="sm:justify-between">

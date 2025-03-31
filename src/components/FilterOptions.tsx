@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -7,9 +7,18 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
-import { CalendarRange } from "lucide-react";
+import { ptBR } from "date-fns/locale";
+import { CalendarRange, Filter, CheckCircle, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DateRange as DayPickerDateRange } from 'react-day-picker';
+import { Separator } from "@/components/ui/separator";
+import { 
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
 
 interface DateRange {
   from: Date | undefined;
@@ -53,151 +62,232 @@ const FilterOptions: React.FC<FilterOptionsProps> = ({
   applyFilters,
   setFilterApplied
 }) => {
+  const [isFilterCollapsed, setIsFilterCollapsed] = useState(false);
+  const [filterCount, setFilterCount] = useState(0);
+  
   const handleCheckboxChange = (setter: React.Dispatch<React.SetStateAction<boolean>>, value: boolean) => {
     setter(value);
     setFilterApplied(true);
+    updateFilterCount();
   };
+  
+  const updateFilterCount = () => {
+    let count = 0;
+    if (removeDuplicates) count++;
+    if (formatNumbers) count++;
+    if (removeInvalid) count++;
+    if (removeEmpty) count++;
+    if (dateRange.from || dateRange.to) count++;
+    if (regexFilter) count++;
+    setFilterCount(count);
+  };
+  
+  React.useEffect(() => {
+    updateFilterCount();
+  }, [removeDuplicates, formatNumbers, removeInvalid, removeEmpty, dateRange, regexFilter]);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div className="space-y-4">
-        <h3 className="font-medium">Processamento de Números</h3>
+    <div className="rounded-lg border">
+      <div className="flex items-center justify-between p-4 cursor-pointer" 
+           onClick={() => setIsFilterCollapsed(!isFilterCollapsed)}>
         <div className="flex items-center space-x-2">
-          <Checkbox 
-            id="removeDuplicates" 
-            checked={removeDuplicates} 
-            onCheckedChange={(checked) => {
-              handleCheckboxChange(setRemoveDuplicates, checked === true);
-            }}
-          />
-          <Label htmlFor="removeDuplicates">Remover duplicados</Label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Checkbox 
-            id="formatNumbers" 
-            checked={formatNumbers} 
-            onCheckedChange={(checked) => {
-              handleCheckboxChange(setFormatNumbers, checked === true);
-            }}
-          />
-          <Label htmlFor="formatNumbers">Corrigir formato (5562982221100)</Label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Checkbox 
-            id="removeInvalid" 
-            checked={removeInvalid} 
-            onCheckedChange={(checked) => {
-              handleCheckboxChange(setRemoveInvalid, checked === true);
-            }}
-          />
-          <Label htmlFor="removeInvalid">Remover números inválidos</Label>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Checkbox 
-            id="removeEmpty" 
-            checked={removeEmpty} 
-            onCheckedChange={(checked) => {
-              handleCheckboxChange(setRemoveEmpty, checked === true);
-            }}
-          />
-          <Label htmlFor="removeEmpty">Remover números em branco</Label>
-        </div>
-        <div className="flex items-center space-x-2 mt-4">
-          <Checkbox 
-            id="showAllColumns" 
-            checked={showAllColumns} 
-            onCheckedChange={(checked) => {
-              setShowAllColumns(checked === true);
-            }}
-          />
-          <Label htmlFor="showAllColumns">Exibir todas as colunas</Label>
-        </div>
-      </div>
-
-      <div className="space-y-4">
-        <h3 className="font-medium">Filtro por Período</h3>
-        <div>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-full justify-start text-left font-normal",
-                  !dateRange.from && !dateRange.to && "text-muted-foreground"
-                )}
-              >
-                <CalendarRange className="mr-2 h-4 w-4" />
-                {dateRange.from || dateRange.to ? (
-                  <>
-                    {dateRange.from ? format(dateRange.from, "dd/MM/yyyy") : "Início"}
-                    {" - "}
-                    {dateRange.to ? format(dateRange.to, "dd/MM/yyyy") : "Fim"}
-                  </>
-                ) : (
-                  <span>Selecione o período</span>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="range"
-                selected={{
-                  from: dateRange.from,
-                  to: dateRange.to
-                }}
-                onSelect={(selectedRange: DayPickerDateRange | undefined) => {
-                  setDateRange(selectedRange || { from: undefined });
-                  setFilterApplied(true);
-                }}
-                numberOfMonths={2}
-                className="p-3 pointer-events-auto"
-              />
-            </PopoverContent>
-          </Popover>
-          {(dateRange.from || dateRange.to) && (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="mt-2"
-              onClick={() => {
-                setDateRange({ from: undefined });
-                setFilterApplied(true);
-              }}
-            >
-              Limpar período
-            </Button>
+          <Filter className="h-5 w-5 text-gray-500" />
+          <h3 className="font-medium">Opções de Filtro</h3>
+          {filterCount > 0 && (
+            <Badge variant="secondary" className="ml-2">
+              {filterCount} filtro{filterCount !== 1 ? 's' : ''} ativo{filterCount !== 1 ? 's' : ''}
+            </Badge>
           )}
         </div>
+        <Button variant="ghost" size="sm">
+          {isFilterCollapsed ? "Expandir" : "Recolher"}
+        </Button>
       </div>
-
-      <div className="space-y-4">
-        <h3 className="font-medium">Filtro por Identificador (Regex)</h3>
-        <div>
-          <Input
-            placeholder="Ex: formulario|conversão"
-            value={regexFilter}
-            onChange={(e) => setRegexFilter(e.target.value)}
-            className="mb-2"
-          />
-          <Button 
-            onClick={() => applyFilters()}
-            className="mr-2"
-          >
-            Aplicar Filtro
-          </Button>
-          {regexFilter && (
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setRegexFilter("");
-                setFilterApplied(true);
-              }}
-            >
-              Limpar
+      
+      {!isFilterCollapsed && (
+        <div className="p-4 pt-0">
+          <Separator className="mb-4" />
+          
+          <Accordion type="multiple" defaultValue={["processing", "date", "regex"]}>
+            <AccordionItem value="processing">
+              <AccordionTrigger>Processamento de Números</AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-3 mt-2 ml-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="removeDuplicates" 
+                      checked={removeDuplicates} 
+                      onCheckedChange={(checked) => {
+                        handleCheckboxChange(setRemoveDuplicates, checked === true);
+                      }}
+                    />
+                    <Label htmlFor="removeDuplicates">Remover números duplicados</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="formatNumbers" 
+                      checked={formatNumbers} 
+                      onCheckedChange={(checked) => {
+                        handleCheckboxChange(setFormatNumbers, checked === true);
+                      }}
+                    />
+                    <Label htmlFor="formatNumbers">Corrigir formato (5562982221100)</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="removeInvalid" 
+                      checked={removeInvalid} 
+                      onCheckedChange={(checked) => {
+                        handleCheckboxChange(setRemoveInvalid, checked === true);
+                      }}
+                    />
+                    <Label htmlFor="removeInvalid">Remover números inválidos</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="removeEmpty" 
+                      checked={removeEmpty} 
+                      onCheckedChange={(checked) => {
+                        handleCheckboxChange(setRemoveEmpty, checked === true);
+                      }}
+                    />
+                    <Label htmlFor="removeEmpty">Remover números em branco</Label>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+            
+            <AccordionItem value="date">
+              <AccordionTrigger>Filtro por Período</AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-4 mt-2 ml-2">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !dateRange.from && !dateRange.to && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarRange className="mr-2 h-4 w-4" />
+                        {dateRange.from || dateRange.to ? (
+                          <>
+                            {dateRange.from ? format(dateRange.from, "dd/MM/yyyy") : "Início"}
+                            {" - "}
+                            {dateRange.to ? format(dateRange.to, "dd/MM/yyyy") : "Fim"}
+                          </>
+                        ) : (
+                          <span>Selecione o período</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="range"
+                        selected={{
+                          from: dateRange.from,
+                          to: dateRange.to
+                        }}
+                        onSelect={(selectedRange: DayPickerDateRange | undefined) => {
+                          setDateRange(selectedRange || { from: undefined });
+                          setFilterApplied(true);
+                        }}
+                        numberOfMonths={2}
+                        locale={ptBR}
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  {(dateRange.from || dateRange.to) && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex items-center"
+                      onClick={() => {
+                        setDateRange({ from: undefined });
+                        setFilterApplied(true);
+                      }}
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      Limpar período
+                    </Button>
+                  )}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+            
+            <AccordionItem value="regex">
+              <AccordionTrigger>Filtro por Identificador (Regex)</AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-3 mt-2 ml-2">
+                  <Label htmlFor="regexFilter" className="block mb-1">
+                    Expressão Regular
+                  </Label>
+                  <div className="flex space-x-2">
+                    <Input
+                      id="regexFilter"
+                      placeholder="Ex: formulario|conversão"
+                      value={regexFilter}
+                      onChange={(e) => setRegexFilter(e.target.value)}
+                    />
+                    <Button 
+                      onClick={() => applyFilters()}
+                      size="sm"
+                      className="whitespace-nowrap"
+                    >
+                      <Filter className="h-4 w-4 mr-1" />
+                      Filtrar
+                    </Button>
+                  </div>
+                  {regexFilter && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="flex items-center mt-2"
+                      onClick={() => {
+                        setRegexFilter("");
+                        setFilterApplied(true);
+                      }}
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      Limpar filtro
+                    </Button>
+                  )}
+                  <div className="text-sm text-gray-500 mt-2">
+                    <p>Use o caractere | para separar termos, ex: "form|site" irá buscar por "form" OU "site"</p>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+            
+            <AccordionItem value="display">
+              <AccordionTrigger>Opções de Exibição</AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-3 mt-2 ml-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="showAllColumns" 
+                      checked={showAllColumns} 
+                      onCheckedChange={(checked) => {
+                        setShowAllColumns(checked === true);
+                      }}
+                    />
+                    <Label htmlFor="showAllColumns">Exibir todas as colunas</Label>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+          
+          <div className="flex justify-end mt-4">
+            <Button onClick={applyFilters} className="flex items-center">
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Aplicar Filtros
             </Button>
-          )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
