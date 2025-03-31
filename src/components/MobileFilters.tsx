@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -36,6 +36,7 @@ interface MobileFiltersProps {
   regexFilter: string;
   setRegexFilter: (value: string) => void;
   applyFilters: () => void;
+  resetFilters: () => void;
   isLoading: boolean;
 }
 
@@ -55,8 +56,18 @@ const MobileFilters: React.FC<MobileFiltersProps> = ({
   regexFilter,
   setRegexFilter,
   applyFilters,
+  resetFilters,
   isLoading
 }) => {
+  // Apply filters automatically when filter values change
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!isLoading) applyFilters();
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, [removeDuplicates, formatNumbers, removeInvalid, removeEmpty, dateRange, regexFilter]);
+  
   return (
     <Drawer>
       <DrawerTrigger asChild>
@@ -158,6 +169,18 @@ const MobileFilters: React.FC<MobileFiltersProps> = ({
                 />
               </PopoverContent>
             </Popover>
+            
+            {dateRange.from && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex items-center gap-1"
+                onClick={() => setDateRange({ from: undefined })}
+              >
+                <X className="h-4 w-4" />
+                Limpar data
+              </Button>
+            )}
           </div>
 
           <div className="space-y-3">
@@ -170,9 +193,30 @@ const MobileFilters: React.FC<MobileFiltersProps> = ({
             <div className="text-xs text-gray-500">
               Expressões regulares para filtrar por identificador. Use | para separar múltiplos padrões.
             </div>
+            
+            {regexFilter && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex items-center gap-1"
+                onClick={() => setRegexFilter("")}
+              >
+                <X className="h-4 w-4" />
+                Limpar regex
+              </Button>
+            )}
           </div>
         </div>
-        <DrawerFooter>
+        <DrawerFooter className="space-y-2">
+          <Button 
+            onClick={resetFilters} 
+            variant="outline"
+            className="w-full"
+          >
+            <X className="mr-2 h-4 w-4" />
+            Limpar Todos os Filtros
+          </Button>
+          
           <Button 
             onClick={applyFilters} 
             className="w-full"

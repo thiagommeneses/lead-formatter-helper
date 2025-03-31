@@ -9,9 +9,7 @@ import {
   Plus,
   X, 
   Trash2,
-  RefreshCw,
   MessageSquare,
-  Loader2,
   FileWarning
 } from "lucide-react";
 import { toast } from 'sonner';
@@ -29,7 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import EnhancedDataTable from '@/components/EnhancedDataTable';
-import EnhancedExportPreview from '@/components/EnhancedExportPreview';
+import ExportPreview from '@/components/ExportPreview';
 import { paginateData, processDataInChunks, filterDataInChunks } from '@/utils/dataLoader';
 import FilterSidebar from '@/components/FilterSidebar';
 import MobileFilters from '@/components/MobileFilters';
@@ -54,6 +52,14 @@ interface FilterStats {
   validPhoneNumbers: number;
 }
 
+const defaultFilterStats: FilterStats = {
+  totalRecords: 0,
+  filteredRecords: 0,
+  invalidNumbers: 0,
+  duplicateNumbers: 0,
+  validPhoneNumbers: 0
+};
+
 const Index = () => {
   const [data, setData] = useState<Lead[]>([]);
   const [displayData, setDisplayData] = useState<Lead[]>([]);
@@ -68,13 +74,7 @@ const Index = () => {
   const [showSmsDialog, setShowSmsDialog] = useState(false);
   const [smsText, setSmsText] = useState("");
   const [showAllColumns, setShowAllColumns] = useState(true);
-  const [filterStats, setFilterStats] = useState<FilterStats>({
-    totalRecords: 0,
-    filteredRecords: 0,
-    invalidNumbers: 0,
-    duplicateNumbers: 0,
-    validPhoneNumbers: 0
-  });
+  const [filterStats, setFilterStats] = useState<FilterStats>(defaultFilterStats);
   const [isLoading, setIsLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -155,6 +155,20 @@ const Index = () => {
     setVisibleItemsCount(newCount);
   };
 
+  const resetFilters = () => {
+    setRemoveDuplicates(false);
+    setFormatNumbers(false);
+    setRemoveInvalid(false);
+    setRemoveEmpty(true);
+    setDateRange({ from: undefined });
+    setRegexFilter("");
+    
+    toast.success("Filtros reiniciados");
+    
+    // Apply default filters after reset
+    applyFilters(data);
+  };
+
   const applyFilters = async (sourceData: Lead[] = data) => {
     if (sourceData.length === 0) {
       toast.error("Nenhum dado disponível para filtrar");
@@ -163,7 +177,6 @@ const Index = () => {
     
     setIsLoading(true);
     setProcessingProgress(0);
-    toast.info("Aplicando filtros...");
     
     const stats: FilterStats = {
       totalRecords: sourceData.length,
@@ -288,8 +301,6 @@ const Index = () => {
     setVisibleItemsCount(5);
     setCurrentPage(1);
     setIsLoading(false);
-    
-    toast.success("Filtros aplicados com sucesso!");
   };
 
   const resetData = () => {
@@ -300,13 +311,8 @@ const Index = () => {
     setShowUploadArea(true);
     setCurrentPage(1);
     setVisibleItemsCount(5);
-    setFilterStats({
-      totalRecords: 0,
-      filteredRecords: 0,
-      invalidNumbers: 0,
-      duplicateNumbers: 0,
-      validPhoneNumbers: 0
-    });
+    setFilterStats(defaultFilterStats);
+    resetFilters();
     toast.success("Dados limpos com sucesso!");
   };
 
@@ -334,25 +340,6 @@ const Index = () => {
     setShowSmsDialog(true);
   };
 
-  const exportPhoneNumbers = (selectedNumbers: string[]) => {
-    if (selectedNumbers.length === 0) {
-      toast.error("Nenhum número selecionado para exportação");
-      return;
-    }
-    
-    const csvContent = "fullNumber\n" + selectedNumbers.join("\n");
-    
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'phone_numbers.csv';
-    link.click();
-    URL.revokeObjectURL(url);
-    
-    toast.success(`${selectedNumbers.length} números exportados com sucesso!`);
-  };
-
   const exportForZenvia = () => {
     if (smsText.trim() === "") {
       toast.error("Por favor, insira um texto para o SMS");
@@ -377,7 +364,17 @@ const Index = () => {
     }
     
     if (exportType === 'omnichat') {
-      exportPhoneNumbers(selectedNumbers);
+      const csvContent = "fullNumber\n" + selectedNumbers.join("\n");
+      
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'phone_numbers.csv';
+      link.click();
+      URL.revokeObjectURL(url);
+      
+      toast.success(`${selectedNumbers.length} números exportados com sucesso!`);
     } else if (exportType === 'zenvia') {
       let csvContent = "celular;sms\n";
       selectedNumbers.forEach(number => {
@@ -400,7 +397,7 @@ const Index = () => {
   return (
     <SidebarProvider>
       <div className="flex min-h-screen bg-gray-50">
-        {isCSVLoaded && !isLoading && (
+        {isCSVLoaded && (
           <FilterSidebar
             removeDuplicates={removeDuplicates}
             setRemoveDuplicates={setRemoveDuplicates}
@@ -417,6 +414,7 @@ const Index = () => {
             regexFilter={regexFilter}
             setRegexFilter={setRegexFilter}
             applyFilters={() => applyFilters()}
+            resetFilters={resetFilters}
             isLoading={isLoading}
           />
         )}
@@ -430,7 +428,7 @@ const Index = () => {
               </p>
             </div>
 
-            {isCSVLoaded && !isLoading && (
+            {isCSVLoaded && (
               <div className="sticky top-0 z-10 bg-white border-b border-gray-200 p-3 rounded-md mb-4 shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
@@ -450,6 +448,7 @@ const Index = () => {
                       regexFilter={regexFilter}
                       setRegexFilter={setRegexFilter}
                       applyFilters={() => applyFilters()}
+                      resetFilters={resetFilters}
                       isLoading={isLoading}
                     />
                     
@@ -495,7 +494,7 @@ const Index = () => {
               </div>
             )}
 
-            {isCSVLoaded && !isLoading && (
+            {isCSVLoaded && (
               <div className="mb-4">
                 <StatsCard filterStats={filterStats} variant="compact" />
               </div>
@@ -538,7 +537,7 @@ const Index = () => {
               </Card>
             )}
 
-            {isCSVLoaded && !isLoading && (
+            {isCSVLoaded && (
               <>
                 <Card>
                   <CardHeader className="pb-2">
@@ -633,7 +632,7 @@ const Index = () => {
               </DialogContent>
             </Dialog>
 
-            <EnhancedExportPreview 
+            <ExportPreview 
               open={showExportPreview}
               onOpenChange={setShowExportPreview}
               phoneNumbers={phonesToExport}

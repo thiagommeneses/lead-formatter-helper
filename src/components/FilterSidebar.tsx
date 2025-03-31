@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -8,7 +8,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { DateRange } from 'react-day-picker';
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { CalendarIcon, RefreshCw } from "lucide-react";
+import { CalendarIcon, RefreshCw, X } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
@@ -38,6 +38,7 @@ interface FilterSidebarProps {
   regexFilter: string;
   setRegexFilter: (value: string) => void;
   applyFilters: () => void;
+  resetFilters: () => void;
   isLoading: boolean;
 }
 
@@ -57,8 +58,18 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
   regexFilter,
   setRegexFilter,
   applyFilters,
+  resetFilters,
   isLoading
 }) => {
+  // Apply filters automatically when filter values change
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!isLoading) applyFilters();
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, [removeDuplicates, formatNumbers, removeInvalid, removeEmpty, dateRange, regexFilter]);
+  
   return (
     <Sidebar variant="inset" collapsible="icon" className="hidden md:block">
       <SidebarHeader>
@@ -160,6 +171,18 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
                   />
                 </PopoverContent>
               </Popover>
+              
+              {dateRange.from && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex items-center gap-1"
+                  onClick={() => setDateRange({ from: undefined })}
+                >
+                  <X className="h-4 w-4" />
+                  Limpar data
+                </Button>
+              )}
             </div>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -176,12 +199,33 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
               <div className="text-xs text-gray-500">
                 Expressões regulares para filtrar por identificador. Use | para separar múltiplos padrões.
               </div>
+              
+              {regexFilter && (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex items-center gap-1"
+                  onClick={() => setRegexFilter("")}
+                >
+                  <X className="h-4 w-4" />
+                  Limpar regex
+                </Button>
+              )}
             </div>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
       
-      <SidebarFooter>
+      <SidebarFooter className="space-y-2">
+        <Button 
+          onClick={resetFilters} 
+          variant="outline"
+          className="w-full"
+        >
+          <X className="mr-2 h-4 w-4" />
+          Limpar Todos os Filtros
+        </Button>
+        
         <Button 
           onClick={applyFilters} 
           className="w-full"
