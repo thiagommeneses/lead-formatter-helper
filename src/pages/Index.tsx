@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,6 +56,7 @@ const Index = () => {
   const [removeDuplicates, setRemoveDuplicates] = useState(false);
   const [formatNumbers, setFormatNumbers] = useState(false);
   const [removeInvalid, setRemoveInvalid] = useState(false);
+  const [removeEmpty, setRemoveEmpty] = useState(true); // New state for removing empty phone numbers, default to true
   const [dateRange, setDateRange] = useState<DateRange>({ from: undefined });
   const [regexFilter, setRegexFilter] = useState("");
   const [isCSVLoaded, setIsCSVLoaded] = useState(false);
@@ -94,6 +96,14 @@ const Index = () => {
       duplicateNumbers: 0,
       validPhoneNumbers: 0
     };
+
+    // Remove rows with empty phone numbers if the option is selected
+    if (removeEmpty) {
+      filteredData = filteredData.filter(row => {
+        const phoneNumber = row['Celular'] || row['Telefone'];
+        return phoneNumber && phoneNumber.trim() !== '';
+      });
+    }
 
     if (dateRange.from || dateRange.to) {
       filteredData = filteredData.filter(row => {
@@ -288,6 +298,16 @@ const Index = () => {
                         }}
                       />
                       <Label htmlFor="removeInvalid">Remover números inválidos</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox 
+                        id="removeEmpty" 
+                        checked={removeEmpty} 
+                        onCheckedChange={(checked) => {
+                          handleCheckboxChange(setRemoveEmpty, checked === true);
+                        }}
+                      />
+                      <Label htmlFor="removeEmpty">Remover números em branco</Label>
                     </div>
                     <div className="flex items-center space-x-2 mt-4">
                       <Checkbox 
