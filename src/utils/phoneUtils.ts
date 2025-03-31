@@ -21,6 +21,63 @@ export function formatPhoneNumber(phoneNumber: string): string {
 }
 
 /**
+ * List of valid Brazilian DDD codes
+ * This is a comprehensive list of all valid DDD codes in Brazil
+ */
+const validBrazilianDDDs = [
+  // São Paulo
+  '11', '12', '13', '14', '15', '16', '17', '18', '19',
+  // Rio de Janeiro
+  '21', '22', '24',
+  // Espírito Santo
+  '27', '28',
+  // Minas Gerais
+  '31', '32', '33', '34', '35', '37', '38',
+  // Paraná
+  '41', '42', '43', '44', '45', '46',
+  // Santa Catarina
+  '47', '48', '49',
+  // Rio Grande do Sul
+  '51', '53', '54', '55',
+  // Distrito Federal e Goiás
+  '61', '62', '64',
+  // Mato Grosso
+  '65', '66',
+  // Mato Grosso do Sul
+  '67',
+  // Acre e Rondônia
+  '68', '69',
+  // Bahia
+  '71', '73', '74', '75', '77',
+  // Sergipe
+  '79',
+  // Pernambuco
+  '81', '87',
+  // Alagoas
+  '82',
+  // Paraíba
+  '83',
+  // Rio Grande do Norte
+  '84',
+  // Ceará
+  '85', '88',
+  // Piauí
+  '86', '89',
+  // Pará
+  '91', '93', '94',
+  // Amazonas
+  '92', '97',
+  // Roraima
+  '95',
+  // Amapá
+  '96',
+  // Tocantins
+  '63',
+  // Maranhão
+  '98', '99'
+];
+
+/**
  * Checks if a phone number is valid Brazilian mobile number
  * Valid format: 55 + DDD (2 digits) + 9 (for mobile) + 8 digits
  * Also performs basic pattern validation to filter out sequential or random numbers
@@ -32,7 +89,7 @@ export function isValidBrazilianNumber(phoneNumber: string): boolean {
   // Check if it's empty
   if (!cleaned) return false;
   
-  // Check proper format: must start with 55, followed by DDD (2 digits), followed by 9 digits
+  // Check proper format: must start with 55, followed by valid DDD (2 digits), followed by 9 digits
   // Must be exactly 13 digits for a valid Brazilian mobile number
   if (cleaned.length !== 13 || !cleaned.startsWith('55')) {
     return false;
@@ -42,10 +99,8 @@ export function isValidBrazilianNumber(phoneNumber: string): boolean {
   const ddd = cleaned.substring(2, 4);
   const number = cleaned.substring(4);
   
-  // Check for valid DDD (very basic check)
-  // Brazilian DDDs range from 11 to 99, but not all numbers in this range are valid
-  // This is a simplified check
-  if (Number(ddd) < 11 || Number(ddd) > 99) {
+  // Check for valid DDD using our comprehensive list
+  if (!validBrazilianDDDs.includes(ddd)) {
     return false;
   }
   
@@ -83,8 +138,8 @@ export function extractPhoneNumbers(data: any[]): string[] {
     // Format the number first
     const formattedNumber = formatPhoneNumber(phoneNumber);
     
-    // Only add numbers that are valid AND exactly 13 digits (valid Brazilian mobile numbers)
-    if (formattedNumber && isValidBrazilianNumber(formattedNumber) && formattedNumber.length === 13) {
+    // Only add numbers that are valid Brazilian mobile numbers
+    if (formattedNumber && isValidBrazilianNumber(formattedNumber)) {
       numbers.add(formattedNumber);
     }
   });
