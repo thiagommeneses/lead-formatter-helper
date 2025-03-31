@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import FileUploader from '@/components/FileUploader';
 import DataTable from '@/components/DataTable';
 import { formatPhoneNumber, isValidBrazilianNumber, extractPhoneNumbers } from '@/utils/phoneUtils';
+import { DateRange as DayPickerDateRange } from 'react-day-picker';
 
 interface Lead {
   'Data da Conversão': string;
@@ -26,9 +27,10 @@ interface Lead {
   [key: string]: string;
 }
 
+// Updated interface to match react-day-picker's DateRange
 interface DateRange {
   from: Date | undefined;
-  to: Date | undefined;
+  to?: Date | undefined;
 }
 
 const Index = () => {
@@ -38,7 +40,7 @@ const Index = () => {
   const [removeDuplicates, setRemoveDuplicates] = useState(false);
   const [formatNumbers, setFormatNumbers] = useState(false);
   const [removeInvalid, setRemoveInvalid] = useState(false);
-  const [dateRange, setDateRange] = useState<DateRange>({ from: undefined, to: undefined });
+  const [dateRange, setDateRange] = useState<DateRange>({ from: undefined });
   const [regexFilter, setRegexFilter] = useState("");
   const [isCSVLoaded, setIsCSVLoaded] = useState(false);
   const [filterApplied, setFilterApplied] = useState(false);
@@ -257,8 +259,8 @@ const Index = () => {
                               from: dateRange.from,
                               to: dateRange.to
                             }}
-                            onSelect={(range) => {
-                              setDateRange(range || { from: undefined, to: undefined });
+                            onSelect={(selectedRange: DayPickerDateRange | undefined) => {
+                              setDateRange(selectedRange || { from: undefined });
                               setFilterApplied(true);
                             }}
                             numberOfMonths={2}
@@ -272,7 +274,7 @@ const Index = () => {
                           size="sm" 
                           className="mt-2"
                           onClick={() => {
-                            setDateRange({ from: undefined, to: undefined });
+                            setDateRange({ from: undefined });
                             setFilterApplied(true);
                           }}
                         >
