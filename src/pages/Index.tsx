@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,13 +8,22 @@ import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format, isWithinInterval } from "date-fns";
-import { CalendarIcon, CalendarRange } from "lucide-react";
+import { CalendarIcon, CalendarRange, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from 'sonner';
 import FileUploader from '@/components/FileUploader';
 import DataTable from '@/components/DataTable';
 import { formatPhoneNumber, isValidBrazilianNumber, extractPhoneNumbers } from '@/utils/phoneUtils';
 import { DateRange as DayPickerDateRange } from 'react-day-picker';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter,
+  DialogDescription
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 
 interface Lead {
   'Data da Conversão': string;
@@ -44,6 +52,8 @@ const Index = () => {
   const [regexFilter, setRegexFilter] = useState("");
   const [isCSVLoaded, setIsCSVLoaded] = useState(false);
   const [filterApplied, setFilterApplied] = useState(false);
+  const [showSmsDialog, setShowSmsDialog] = useState(false);
+  const [smsText, setSmsText] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = (csvData: Lead[]) => {
@@ -161,7 +171,43 @@ const Index = () => {
     toast.success(`${phoneNumbers.length} números exportados com sucesso!`);
   };
 
-  // Handle checkbox changes with immediate filter application
+  const exportForZenvia = () => {
+    if (smsText.trim() === "") {
+      toast.error("Por favor, insira um texto para o SMS");
+      return;
+    }
+    
+    if (smsText.length > 160) {
+      toast.error("O texto do SMS não pode exceder 160 caracteres");
+      return;
+    }
+    
+    // Get all unique, valid phone numbers
+    const phoneNumbers = extractPhoneNumbers(displayData);
+    
+    // Create CSV content with headers "celular" and "sms"
+    let csvContent = "celular,sms\n";
+    
+    // Add each phone number with the SMS text
+    phoneNumbers.forEach(number => {
+      csvContent += `${number},"${smsText}"\n`;
+    });
+    
+    // Create blob and download link
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=ansi' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'zenvia_export.csv';
+    link.click();
+    URL.revokeObjectURL(url);
+    
+    // Close dialog and show success message
+    setShowSmsDialog(false);
+    setSmsText("");
+    toast.success(`${phoneNumbers.length} números exportados para formato Zenvia!`);
+  };
+
   const handleCheckboxChange = (setter: React.Dispatch<React.SetStateAction<boolean>>, value: boolean) => {
     setter(value);
     setFilterApplied(true);
@@ -322,12 +368,19 @@ const Index = () => {
                     <p><strong>Registros filtrados:</strong> {displayData.length}</p>
                     <p><strong>Registros exibidos:</strong> {Math.min(visibleRows, displayData.length)}</p>
                   </div>
-                  <Button 
-                    onClick={exportPhoneNumbers}
-                    variant="default"
-                  >
-                    Exportar Números
-                  </Button>
+                  <div className="space-x-2">
+                    <Button onClick={exportPhoneNumbers} variant="outline">
+                      Exportar Números
+                    </Button>
+                    <Button 
+                      onClick={() => setShowSmsDialog(true)}
+                      variant="default"
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      <MessageSquare className="mr-2 h-4 w-4" />
+                      Exportar Para Zenvia
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -352,6 +405,42 @@ const Index = () => {
             </Card>
           </>
         )}
+
+        <Dialog open={showSmsDialog} onOpenChange={setShowSmsDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Exportar para Zenvia</DialogTitle>
+              <DialogDescription>
+                Digite o texto da mensagem SMS que será enviada. Máximo de 160 caracteres.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-4 py-4">
+              <Textarea
+                placeholder="Digite aqui o texto do SMS..."
+                value={smsText}
+                onChange={(e) => setSmsText(e.target.value)}
+                className="min-h-[120px]"
+                maxLength={160}
+              />
+              <div className="text-right text-sm text-gray-500">
+                {smsText.length}/160 caracteres
+              </div>
+            </div>
+            <DialogFooter className="sm:justify-between">
+              <Button type="button" variant="outline" onClick={() => setShowSmsDialog(false)}>
+                Cancelar
+              </Button>
+              <Button 
+                type="button" 
+                onClick={exportForZenvia}
+                disabled={smsText.trim() === "" || smsText.length > 160}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                Exportar {displayData.length > 0 ? `(${extractPhoneNumbers(displayData).length} números)` : ""}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
