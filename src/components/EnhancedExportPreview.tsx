@@ -23,9 +23,10 @@ interface EnhancedExportPreviewProps {
   open: boolean;
   onOpenChange: (value: boolean) => void;
   phoneNumbers: string[];
-  onExport: (selectedNumbers: string[]) => void;
+  onExport: (selectedNumbers: string[], includeFirstName: boolean) => void;
   exportType: 'omnichat' | 'zenvia';
   smsText?: string;
+  namesData?: Record<string, string>;
 }
 
 const EnhancedExportPreview: React.FC<EnhancedExportPreviewProps> = ({
@@ -34,13 +35,15 @@ const EnhancedExportPreview: React.FC<EnhancedExportPreviewProps> = ({
   phoneNumbers,
   onExport,
   exportType,
-  smsText
+  smsText,
+  namesData
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedNumbers, setSelectedNumbers] = useState<string[]>([]);
   const [selectAll, setSelectAll] = useState(true);
   const [exportFormat, setExportFormat] = useState<'csv' | 'txt' | 'clipboard'>('csv');
   const [filteredNumbers, setFilteredNumbers] = useState<string[]>([]);
+  const [includeFirstName, setIncludeFirstName] = useState(false);
 
   // Reset states when dialog opens
   useEffect(() => {
@@ -49,6 +52,7 @@ const EnhancedExportPreview: React.FC<EnhancedExportPreviewProps> = ({
       setSelectAll(true);
       setSearchTerm('');
       setExportFormat('csv');
+      setIncludeFirstName(false);
     }
   }, [open, phoneNumbers]);
 
@@ -100,7 +104,7 @@ const EnhancedExportPreview: React.FC<EnhancedExportPreviewProps> = ({
       return;
     }
     
-    onExport(selectedNumbers);
+    onExport(selectedNumbers, includeFirstName);
     onOpenChange(false);
   };
 
@@ -193,6 +197,17 @@ const EnhancedExportPreview: React.FC<EnhancedExportPreviewProps> = ({
                     </Label>
                   </div>
                 </RadioGroup>
+              </div>
+
+              <div className="flex items-center space-x-2 pt-2">
+                <Checkbox 
+                  id="includeFirstName" 
+                  checked={includeFirstName} 
+                  onCheckedChange={(checked) => setIncludeFirstName(!!checked)}
+                />
+                <Label htmlFor="includeFirstName">
+                  Incluir coluna com primeiro nome
+                </Label>
               </div>
 
               {exportType === 'zenvia' && smsText && (

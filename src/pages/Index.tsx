@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -357,14 +356,50 @@ const Index = () => {
     setShowExportPreview(true);
   };
 
-  const handleFinalExport = (selectedNumbers: string[]) => {
+  // Helper function to get first name
+  const getFirstName = (fullName: string): string => {
+    if (!fullName || fullName.trim() === '') return 'Futuro Aluno UniBF';
+    
+    const firstName = fullName.trim().split(' ')[0];
+    // Capitalize only first letter
+    return firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+  };
+
+  // Map of phone numbers to names
+  const createPhoneToNameMap = () => {
+    const phoneToName: Record<string, string> = {};
+    
+    displayData.forEach(lead => {
+      const phone = lead['Celular'] || lead['Telefone'];
+      const name = lead['Nome'];
+      
+      if (phone && phone.trim() !== '') {
+        phoneToName[phone] = getFirstName(name);
+      }
+    });
+    
+    return phoneToName;
+  };
+
+  const handleFinalExport = (selectedNumbers: string[], includeFirstName: boolean) => {
     if (selectedNumbers.length === 0) {
       toast.error("Nenhum número selecionado para exportação");
       return;
     }
     
+    const phoneToNameMap = includeFirstName ? createPhoneToNameMap() : {};
+    
     if (exportType === 'omnichat') {
-      const csvContent = "fullNumber\n" + selectedNumbers.join("\n");
+      let csvContent = includeFirstName ? "fullNumber;Nome\n" : "fullNumber\n";
+      
+      selectedNumbers.forEach(number => {
+        if (includeFirstName) {
+          const name = phoneToNameMap[number] || 'Futuro Aluno UniBF';
+          csvContent += `${number};${name}\n`;
+        } else {
+          csvContent += `${number}\n`;
+        }
+      });
       
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
       const url = URL.createObjectURL(blob);
@@ -376,9 +411,15 @@ const Index = () => {
       
       toast.success(`${selectedNumbers.length} números exportados com sucesso!`);
     } else if (exportType === 'zenvia') {
-      let csvContent = "celular;sms\n";
+      let csvContent = includeFirstName ? "celular;sms;Nome\n" : "celular;sms\n";
+      
       selectedNumbers.forEach(number => {
-        csvContent += `${number};${smsText}\n`;
+        if (includeFirstName) {
+          const name = phoneToNameMap[number] || 'Futuro Aluno UniBF';
+          csvContent += `${number};${smsText};${name}\n`;
+        } else {
+          csvContent += `${number};${smsText}\n`;
+        }
       });
       
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });

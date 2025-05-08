@@ -15,14 +15,16 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface ExportPreviewProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   phoneNumbers: string[];
-  onExport: (selectedNumbers: string[]) => void;
+  onExport: (selectedNumbers: string[], includeFirstName: boolean) => void;
   exportType: 'omnichat' | 'zenvia';
   smsText?: string;
+  namesData?: Record<string, string>;
 }
 
 const ExportPreview: React.FC<ExportPreviewProps> = ({
@@ -31,14 +33,17 @@ const ExportPreview: React.FC<ExportPreviewProps> = ({
   phoneNumbers,
   onExport,
   exportType,
-  smsText
+  smsText,
+  namesData
 }) => {
   const [exportFormat, setExportFormat] = useState<'csv' | 'clipboard'>('csv');
+  const [includeFirstName, setIncludeFirstName] = useState(false);
   
   // Reset states when dialog opens
   useEffect(() => {
     if (open) {
       setExportFormat('csv');
+      setIncludeFirstName(false);
     }
   }, [open]);
 
@@ -60,7 +65,7 @@ const ExportPreview: React.FC<ExportPreviewProps> = ({
       return;
     }
     
-    onExport(phoneNumbers);
+    onExport(phoneNumbers, includeFirstName);
   };
 
   return (
@@ -98,6 +103,17 @@ const ExportPreview: React.FC<ExportPreviewProps> = ({
                 </Label>
               </div>
             </RadioGroup>
+          </div>
+
+          <div className="flex items-center space-x-2 pt-2">
+            <Checkbox 
+              id="includeFirstName" 
+              checked={includeFirstName} 
+              onCheckedChange={(checked) => setIncludeFirstName(!!checked)}
+            />
+            <Label htmlFor="includeFirstName">
+              Incluir coluna com primeiro nome
+            </Label>
           </div>
 
           {exportType === 'zenvia' && smsText && (
