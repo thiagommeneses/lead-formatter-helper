@@ -72,18 +72,18 @@ function exportPhoneNumbers($numbers, $includeFirstName = false, $names = array(
     
     // Add header based on whether first name is included
     if ($includeFirstName) {
-        fputcsv($output, ['fullNumber', 'Nome']);
+        fputcsv($output, ['fullNumber', 'Nome'], ',');
     } else {
-        fputcsv($output, ['fullNumber']);
+        fputcsv($output, ['fullNumber'], ',');
     }
     
     // Add each phone number and name if requested
     foreach ($numbers as $number) {
         if ($includeFirstName) {
             $name = isset($names[$number]) ? $names[$number] : 'Futuro Aluno UniBF';
-            fputcsv($output, [$number, $name]);
+            fputcsv($output, [$number, $name], ',');
         } else {
-            fputcsv($output, [$number]);
+            fputcsv($output, [$number], ',');
         }
     }
     

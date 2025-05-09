@@ -390,12 +390,12 @@ const Index = () => {
     const phoneToNameMap = includeFirstName ? createPhoneToNameMap() : {};
     
     if (exportType === 'omnichat') {
-      let csvContent = includeFirstName ? "fullNumber;Nome\n" : "fullNumber\n";
+      let csvContent = includeFirstName ? "fullNumber,Nome\n" : "fullNumber\n";
       
       selectedNumbers.forEach(number => {
         if (includeFirstName) {
           const name = phoneToNameMap[number] || 'Futuro Aluno UniBF';
-          csvContent += `${number};${name}\n`;
+          csvContent += `${number},${name}\n`;
         } else {
           csvContent += `${number}\n`;
         }
